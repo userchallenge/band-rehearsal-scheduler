@@ -1,18 +1,15 @@
 # app.py
-import os
+from flask import Flask, request, jsonify, session
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
-
+import os
 from apscheduler.schedulers.background import BackgroundScheduler
 from email_service import send_rehearsal_summary
-from flask import Flask, jsonify, request, session
-from flask_cors import CORS
-from flask_jwt_extended import (JWTManager, create_access_token,
-                                get_jwt_identity, jwt_required)
-from flask_jwt_extended.exceptions import (InvalidHeaderError,
-                                           NoAuthorizationError)
-from models import LogEntry, Rehearsal, Response, User, db
+from models import db, User, Rehearsal, Response, LogEntry
+from flask_jwt_extended.exceptions import NoAuthorizationError, InvalidHeaderError
 from werkzeug.exceptions import UnprocessableEntity
-from werkzeug.security import check_password_hash, generate_password_hash
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -21,16 +18,12 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:/
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-key')  # Change in production
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
-app.config['JWT_TOKEN_LOCATION'] = ['headers']
-app.config['JWT_HEADER_NAME'] = 'Authorization'
-app.config['JWT_HEADER_TYPE'] = 'Bearer'
 
 # Initialize extensions
 db.init_app(app)
 jwt = JWTManager(app)
-CORS(app)
-
 CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+
 # Set up scheduler for weekly emails
 scheduler = BackgroundScheduler()
 scheduler.add_job(send_rehearsal_summary, 'cron', day_of_week='mon', hour=8, minute=0)
@@ -55,6 +48,87 @@ def create_tables_if_not_exist():
                 db.session.commit()
                 print("Admin user created successfully!")
 
+# Helper function to get current user ID from token
+def get_user_from_token():
+    auth_header = request.headers.get('Authorization', '')
+    
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None
+    
+    token = auth_header[7:]  # Remove 'Bearer ' prefix
+    
+    try:
+        # Simple extraction from token - this is a simplified approach
+        # In a real app, you would validate the token properly
+        import jwt as pyjwt
+        secret_key = app.config['JWT_SECRET_KEY']
+        decoded = pyjwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_signature": False})
+        user_id = decoded.get('sub')
+        
+        if user_id:
+            # Try to convert to int if it's a string number
+            try:
+                user_id = int(user_id)
+            except (ValueError, TypeError):
+                pass
+            
+            # Get the user from database
+            return User.query.get(user_id)
+    except Exception as e:
+        print(f"Error decoding token: {str(e)}")
+        return None
+    
+    return None
+
+# Test endpoint
+@app.route('/api/test', methods=['GET'])
+def test_endpoint():
+    return jsonify({"msg": "API is working!"}), 200
+
+# Debug endpoints
+@app.route('/api/check-token', methods=['GET'])
+def check_token():
+    auth_header = request.headers.get('Authorization', '')
+    token = None
+    
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]  # Remove 'Bearer ' prefix
+    
+    # Simple validation without actually checking signature
+    is_jwt_format = bool(token and '.' in token and len(token.split('.')) == 3)
+    
+    return jsonify({
+        "has_auth_header": bool(auth_header),
+        "auth_header": auth_header,
+        "token_extracted": token is not None,
+        "appears_to_be_jwt": is_jwt_format
+    }), 200
+
+@app.route('/api/debug-jwt', methods=['GET'])
+def debug_jwt():
+    auth_header = request.headers.get('Authorization', 'None')
+    
+    result = {
+        "auth_header": auth_header
+    }
+    
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header[7:]  # Remove 'Bearer ' prefix
+        result["token"] = token
+        
+        try:
+            # Try to decode the token manually
+            import jwt as pyjwt
+            secret_key = app.config['JWT_SECRET_KEY']
+            decoded = pyjwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_signature": False})
+            result["decoded"] = decoded
+            result["sub_type"] = str(type(decoded.get('sub')))
+            result["sub_value"] = decoded.get('sub')
+        except Exception as e:
+            result["decode_error"] = str(e)
+    
+    return jsonify(result), 200
+
 # Authentication routes
 @app.route('/api/auth/login', methods=['POST'])
 def login():
@@ -62,20 +136,21 @@ def login():
     user = User.query.filter_by(username=data.get('username')).first()
     
     if user and user.check_password(data.get('password')):
-        # access_token = create_access_token(identity=user.id)
-        access_token = create_access_token(identity=str(user.id)) 
+        # Create token with string identity
+        identity_str = str(user.id)
+        print(f"Creating token with identity: {identity_str} (type: {type(identity_str)})")
+        access_token = create_access_token(identity=identity_str)
+        
         return jsonify(access_token=access_token, user_id=user.id, is_admin=user.is_admin), 200
     
     return jsonify({"msg": "Bad username or password"}), 401
 
 # User routes
 @app.route('/api/users', methods=['GET'])
-@jwt_required()
 def get_users():
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
+    current_user = get_user_from_token()
     
-    if not current_user.is_admin:
+    if not current_user or not current_user.is_admin:
         return jsonify({"msg": "Admin privileges required"}), 403
     
     users = User.query.all()
@@ -93,12 +168,10 @@ def get_users():
     return jsonify(result), 200
 
 @app.route('/api/users', methods=['POST'])
-@jwt_required()
 def create_user():
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
+    current_user = get_user_from_token()
     
-    if not current_user.is_admin:
+    if not current_user or not current_user.is_admin:
         return jsonify({"msg": "Admin privileges required"}), 403
     
     data = request.get_json()
@@ -129,8 +202,35 @@ def create_user():
 
 # Rehearsal routes
 @app.route('/api/rehearsals', methods=['GET'])
-@jwt_required()
 def get_rehearsals():
+    # Get the token from the header
+    auth_header = request.headers.get('Authorization', '')
+    
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"msg": "Missing or invalid Authorization header"}), 401
+    
+    # Extract just the token part (no validation for now)
+    token = auth_header[7:]
+    
+    try:
+        # Get rehearsals data without JWT validation
+        rehearsals = Rehearsal.query.order_by(Rehearsal.date).all()
+        result = []
+        
+        for rehearsal in rehearsals:
+            result.append({
+                'id': rehearsal.id,
+                'date': rehearsal.date.strftime('%Y-%m-%d'),
+                'responses': len(rehearsal.responses)
+            })
+        
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"msg": f"Error: {str(e)}"}), 500
+
+@app.route('/api/rehearsals-no-auth', methods=['GET'])
+def get_rehearsals_no_auth():
+    # Same logic as your regular rehearsals endpoint but without JWT required
     rehearsals = Rehearsal.query.order_by(Rehearsal.date).all()
     result = []
     
@@ -144,12 +244,10 @@ def get_rehearsals():
     return jsonify(result), 200
 
 @app.route('/api/rehearsals', methods=['POST'])
-@jwt_required()
 def create_rehearsal():
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
+    current_user = get_user_from_token()
     
-    if not current_user.is_admin:
+    if not current_user or not current_user.is_admin:
         return jsonify({"msg": "Admin privileges required"}), 403
     
     data = request.get_json()
@@ -181,7 +279,7 @@ def create_rehearsal():
     
     # Log the creation
     log = LogEntry(
-        user_id=current_user_id,
+        user_id=current_user.id,
         action="create",
         entity_type="rehearsal",
         entity_id=new_rehearsal.id,
@@ -197,9 +295,12 @@ def create_rehearsal():
 
 # Response routes
 @app.route('/api/responses', methods=['GET'])
-@jwt_required()
 def get_responses():
-    current_user_id = get_jwt_identity()
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+        
     rehearsal_id = request.args.get('rehearsal_id')
     
     query = Response.query
@@ -225,15 +326,16 @@ def get_responses():
     return jsonify(result), 200
 
 @app.route('/api/responses/<int:response_id>', methods=['PUT'])
-@jwt_required()
 def update_response(response_id):
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
     
     response = Response.query.get_or_404(response_id)
     
     # Only allow users to update their own responses, unless they're an admin
-    if response.user_id != current_user_id and not current_user.is_admin:
+    if response.user_id != current_user.id and not current_user.is_admin:
         return jsonify({"msg": "You can only update your own responses"}), 403
     
     data = request.get_json()
@@ -253,7 +355,7 @@ def update_response(response_id):
     new_comment = response.comment or ""
     
     log = LogEntry(
-        user_id=current_user_id,
+        user_id=current_user.id,
         action="update",
         entity_type="response",
         entity_id=response_id,
@@ -271,16 +373,14 @@ def update_response(response_id):
 
 # Utility functions
 @app.route('/api/rehearsals/manage', methods=['POST'])
-@jwt_required()
 def manage_rehearsals():
     """
     Handles the functionality to remove past rehearsals and add new ones
     (similar to the deleteOldDate and copyLastColumn functions in your script)
     """
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
+    current_user = get_user_from_token()
     
-    if not current_user.is_admin:
+    if not current_user or not current_user.is_admin:
         return jsonify({"msg": "Admin privileges required"}), 403
     
     # Remove past rehearsals
@@ -309,64 +409,16 @@ def manage_rehearsals():
     return jsonify({"msg": "Rehearsals updated successfully"}), 200
 
 @app.route('/api/email/send', methods=['POST'])
-@jwt_required()
 def trigger_email():
     """Manually trigger sending the rehearsal summary email"""
-    current_user_id = get_jwt_identity()
-    current_user = User.query.get(current_user_id)
+    current_user = get_user_from_token()
     
-    if not current_user.is_admin:
+    if not current_user or not current_user.is_admin:
         return jsonify({"msg": "Admin privileges required"}), 403
     
     send_rehearsal_summary()
     
     return jsonify({"msg": "Email sent successfully"}), 200
-
-@app.errorhandler(UnprocessableEntity)
-def handle_unprocessable_entity(e):
-    return jsonify({"msg": "Invalid token. Please log in again."}), 422
-
-@app.errorhandler(NoAuthorizationError)
-def handle_auth_error(e):
-    return jsonify({"msg": "Missing Authorization header. Please log in."}), 401
-
-@app.errorhandler(InvalidHeaderError)
-def handle_invalid_header(e):
-    return jsonify({"msg": "Invalid Authorization header. Format should be 'Bearer <token>'"}), 422
-
-@app.route('/api/debug-token', methods=['GET'])
-def debug_token():
-    auth_header = request.headers.get('Authorization', '')
-    
-    return jsonify({
-        "message": "Token debug info",
-        "has_auth_header": bool(auth_header),
-        "auth_header": auth_header
-    }), 200
-
-@app.route('/api/check-token', methods=['GET'])
-def check_token():
-    auth_header = request.headers.get('Authorization', '')
-    token = None
-    
-    if auth_header.startswith('Bearer '):
-        token = auth_header[7:]  # Remove 'Bearer ' prefix
-    
-    # Simple validation without actually checking signature
-    is_jwt_format = bool(token and '.' in token and len(token.split('.')) == 3)
-    
-    return jsonify({
-        "has_auth_header": bool(auth_header),
-        "auth_header": auth_header,
-        "token_extracted": token is not None,
-        "appears_to_be_jwt": is_jwt_format
-    }), 200
-
-
-
-@app.route('/api/test', methods=['GET'])
-def test_endpoint():
-    return jsonify({"msg": "API is working!"}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)

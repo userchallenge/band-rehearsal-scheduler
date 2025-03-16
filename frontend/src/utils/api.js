@@ -1,4 +1,4 @@
-// src/utils/api.js - Updated to ensure proper token format
+// src/utils/api.js
 import { getToken, removeToken } from './auth';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5000/api';
@@ -70,7 +70,7 @@ const request = async (endpoint, options = {}) => {
   }
 };
 
-// Existing API functions...
+// Rehearsals
 export const getRehearsals = () => {
   return request('rehearsals');
 };
@@ -88,6 +88,7 @@ export const manageRehearsals = () => {
   });
 };
 
+// Responses
 export const getResponses = (rehearsalId = null) => {
   const url = rehearsalId ? `responses?rehearsal_id=${rehearsalId}` : 'responses';
   return request(url);
@@ -100,6 +101,7 @@ export const updateResponse = (responseId, data) => {
   });
 };
 
+// Users
 export const getUsers = () => {
   return request('users');
 };
@@ -111,6 +113,7 @@ export const createUser = (userData) => {
   });
 };
 
+// Email
 export const sendEmail = () => {
   return request('email/send', {
     method: 'POST'

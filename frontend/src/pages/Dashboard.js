@@ -4,6 +4,63 @@ import { UserContext } from '../contexts/UserContext';
 import { getRehearsals, getResponses, updateResponse } from '../utils/api';
 import './Dashboard.css';
 
+// Debug Button Component
+const DebugButton = () => {
+  const { user } = useContext(UserContext); // Get user from UserContext
+  
+  const debugInfo = () => {
+    // Get token
+    const token = localStorage.getItem('band_app_token');
+    const hasToken = !!token;
+    
+    // Get user info from localStorage
+    const storedUserInfo = localStorage.getItem('user_info');
+    let parsedUserInfo = null;
+    try {
+      parsedUserInfo = JSON.parse(storedUserInfo);
+    } catch (e) {
+      console.error('Error parsing stored user info:', e);
+    }
+    
+    const info = {
+      tokenPresent: hasToken,
+      tokenPreview: hasToken ? `${token.substring(0, 15)}...` : 'None',
+      userContext: user,
+      storedUserInfo: parsedUserInfo
+    };
+    
+    console.log('Debug Info:', info);
+    alert(
+      `Debug Info:
+      Token Present: ${info.tokenPresent}
+      Token Preview: ${info.tokenPreview}
+      User Context: ${JSON.stringify(user)}
+      Stored User Info: ${JSON.stringify(parsedUserInfo)}
+      `
+    );
+  };
+  
+  return (
+    <button 
+      onClick={debugInfo}
+      style={{
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        padding: '10px 15px',
+        backgroundColor: '#333',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        zIndex: 1000
+      }}
+    >
+      Debug
+    </button>
+  );
+};
+
 const Dashboard = () => {
   const { user } = useContext(UserContext);
   const [rehearsals, setRehearsals] = useState([]);
@@ -12,6 +69,9 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   
   useEffect(() => {
+    // Add console log to check user data
+    console.log("Dashboard user data:", user);
+    
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -29,7 +89,7 @@ const Dashboard = () => {
     };
     
     fetchData();
-  }, []);
+  }, [user]); // Add user to dependency array
   
   // Get the next upcoming rehearsal
   const upcomingRehearsal = rehearsals.length > 0 
@@ -121,6 +181,9 @@ const Dashboard = () => {
           </ul>
         </div>
       </div>
+      
+      {/* Add the Debug Button here */}
+      <DebugButton />
     </div>
   );
 };

@@ -1,3 +1,4 @@
+// src/contexts/UserContext.js
 import React, { createContext, useState, useEffect } from 'react';
 import { getToken, getUserFromToken } from '../utils/auth';
 
@@ -10,9 +11,16 @@ export const UserProvider = ({ children }) => {
   useEffect(() => {
     const loadUser = async () => {
       const token = getToken();
+      console.log("Token in UserContext:", token ? "Token found" : "No token");
+      
       if (token) {
-        const userData = getUserFromToken(token);
-        setUser(userData);
+        try {
+          const userData = getUserFromToken(token);
+          console.log("User data from token:", userData);
+          setUser(userData);
+        } catch (err) {
+          console.error("Error parsing user data from token:", err);
+        }
       }
       setLoading(false);
     };

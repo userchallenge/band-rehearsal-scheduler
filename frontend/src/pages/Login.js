@@ -39,6 +39,10 @@ const Login = () => {
       
       // Store token explicitly
       localStorage.setItem('band_app_token', data.access_token);
+      localStorage.setItem('user_info', JSON.stringify({
+        id: data.user_id,
+        isAdmin: data.is_admin
+      }));
       console.log('Token stored in localStorage');
       setDebugInfo(prev => prev + '\nToken stored in localStorage.');
       

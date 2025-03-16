@@ -24,8 +24,15 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
     }
   }, [responses]);
   
-  // Sort rehearsals by date
-  const sortedRehearsals = rehearsals.sort((a, b) => new Date(a.date) - new Date(b.date));
+  // Filter to only show upcoming rehearsals
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  // Get upcoming rehearsals, sort by date, limit to 10
+  const upcomingRehearsals = rehearsals
+    .filter(r => new Date(r.date) >= today)
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .slice(0, 10);
   
   // Format date to display only day and month
   const formatDate = (dateString) => {
@@ -46,8 +53,8 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
     onResponseChange(response.id, !response.attending);
   };
   
-  if (users.length === 0 || sortedRehearsals.length === 0) {
-    return <div>No data available</div>;
+  if (users.length === 0 || upcomingRehearsals.length === 0) {
+    return <div>No upcoming rehearsals found</div>;
   }
   
   return (
@@ -56,7 +63,7 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
         <thead>
           <tr>
             <th className="name-header">Namn</th>
-            {sortedRehearsals.map(rehearsal => (
+            {upcomingRehearsals.map(rehearsal => (
               <th key={rehearsal.id} className="date-header">
                 {formatDate(rehearsal.date)}
               </th>
@@ -71,7 +78,7 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
               <tr key={tableUser.id} className={isCurrentUser ? 'current-user-row' : ''}>
                 <td className="name-cell">{tableUser.username}</td>
                 
-                {sortedRehearsals.map(rehearsal => {
+                {upcomingRehearsals.map(rehearsal => {
                   const response = getUserResponse(tableUser.id, rehearsal.id);
                   if (!response) return <td key={rehearsal.id}>-</td>;
                   
@@ -101,18 +108,24 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
       
       <div className="comment-section">
         <h3>Comments</h3>
-        {responses.filter(r => r.comment && r.comment.trim() !== '').map(response => {
-          const user = users.find(u => u.id === response.user_id);
-          const rehearsal = sortedRehearsals.find(r => r.id === response.rehearsal_id);
-          
-          if (!user || !rehearsal) return null;
-          
-          return (
-            <div key={response.id} className="comment-item">
-              <strong>{user.username} ({formatDate(rehearsal.date)}):</strong> {response.comment}
-            </div>
-          );
-        })}
+        {responses
+          .filter(r => 
+            r.comment && 
+            r.comment.trim() !== '' && 
+            upcomingRehearsals.some(reh => reh.id === r.rehearsal_id)
+          )
+          .map(response => {
+            const user = users.find(u => u.id === response.user_id);
+            const rehearsal = upcomingRehearsals.find(r => r.id === response.rehearsal_id);
+            
+            if (!user || !rehearsal) return null;
+            
+            return (
+              <div key={response.id} className="comment-item">
+                <strong>{user.username} ({formatDate(rehearsal.date)}):</strong> {response.comment}
+              </div>
+            );
+          })}
       </div>
     </div>
   );

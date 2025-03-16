@@ -178,6 +178,8 @@ def get_rehearsals():
     except Exception as e:
         return jsonify({"msg": f"Error: {str(e)}"}), 500
 
+# Update this function in your app.py file
+
 @app.route('/api/rehearsals', methods=['POST'])
 def create_rehearsal():
     current_user = get_user_from_token()
@@ -199,7 +201,7 @@ def create_rehearsal():
     ).first()
     
     if existing:
-        return jsonify({"msg": "A rehearsal already exists on this date"}), 400
+        return jsonify({"msg": f"A rehearsal already exists on {date_str}"}), 400
     
     new_rehearsal = Rehearsal(date=date)
     db.session.add(new_rehearsal)
@@ -226,6 +228,72 @@ def create_rehearsal():
     return jsonify({
         'id': new_rehearsal.id,
         'date': new_rehearsal.date.strftime('%Y-%m-%d')
+    }), 201
+
+# Optional: Add a route for bulk creating rehearsals
+@app.route('/api/rehearsals/bulk', methods=['POST'])
+def create_rehearsals_bulk():
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    data = request.get_json()
+    dates = data.get('dates', [])
+    
+    if not dates:
+        return jsonify({"msg": "No dates provided"}), 400
+    
+    created_rehearsals = []
+    skipped_dates = []
+    
+    for date_str in dates:
+        try:
+            date = datetime.strptime(date_str, '%Y-%m-%d')
+            
+            # Check if rehearsal already exists on this date
+            existing = Rehearsal.query.filter(
+                db.func.date(Rehearsal.date) == date.date()
+            ).first()
+            
+            if existing:
+                skipped_dates.append(date_str)
+                continue
+            
+            new_rehearsal = Rehearsal(date=date)
+            db.session.add(new_rehearsal)
+            
+            # Create default "Ja" responses for all users
+            users = User.query.all()
+            for user in users:
+                response = Response(user=user, rehearsal=new_rehearsal, attending=True)
+                db.session.add(response)
+            
+            db.session.flush()  # Get ID without committing
+            
+            created_rehearsals.append({
+                'id': new_rehearsal.id,
+                'date': new_rehearsal.date.strftime('%Y-%m-%d')
+            })
+            
+            # Log the creation
+            log = LogEntry(
+                user_id=current_user.id,
+                action="create",
+                entity_type="rehearsal",
+                entity_id=new_rehearsal.id,
+                new_value=date_str
+            )
+            db.session.add(log)
+            
+        except ValueError:
+            skipped_dates.append(date_str)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'created': created_rehearsals,
+        'skipped': skipped_dates
     }), 201
 
 # Response routes

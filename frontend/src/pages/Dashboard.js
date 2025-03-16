@@ -1,7 +1,7 @@
 // src/pages/Dashboard.js
 import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../contexts/UserContext';
-import { getRehearsals, getResponses, updateResponse, checkTokenStatus } from '../utils/api';
+import { getRehearsals, getResponses, updateResponse, checkTokenStatus, directTestRehearsals } from '../utils/api';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -100,22 +100,18 @@ const Dashboard = () => {
         </button>
         
         <button 
-          onClick={() => {
+          onClick={async () => {
             try {
-              const token = localStorage.getItem('band_app_token');
-              fetch('http://127.0.0.1:5000/api/rehearsals', {
-                headers: {
-                  'Authorization': `Bearer ${token}`
-                }
-              })
-              .then(res => {
-                alert(`Rehearsals request status: ${res.status} ${res.statusText}`);
-                return res.json().catch(() => ({ error: 'Failed to parse JSON' }));
-              })
-              .then(data => console.log('Response data:', data))
-              .catch(err => alert('Fetch error: ' + err.message));
+              const result = await directTestRehearsals();
+              if (result.status === 200) {
+                alert(`Success! Received ${result.data.length} rehearsals.`);
+              } else if (result.status) {
+                alert(`Request failed with status: ${result.status}\n${JSON.stringify(result.data || {}, null, 2)}`);
+              } else {
+                alert(`Error: ${result.error}`);
+              }
             } catch (err) {
-              alert('Error: ' + err.message);
+              alert('Test failed: ' + err.message);
             }
           }}
           style={{ 

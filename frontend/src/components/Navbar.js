@@ -11,6 +11,7 @@ const Navbar = () => {
   
   const handleLogout = () => {
     removeToken();
+    localStorage.removeItem('user_info');
     setUser(null);
     navigate('/login');
   };
@@ -23,9 +24,6 @@ const Navbar = () => {
       <ul className="nav-links">
         <li>
           <Link to="/">Dashboard</Link>
-        </li>
-        <li>
-          <Link to="/schedule">Schedule</Link>
         </li>
         {user && user.isAdmin === true && (
           <li>

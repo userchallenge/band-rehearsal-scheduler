@@ -92,11 +92,6 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
                       title={isCurrentUser ? 'Click to change your response' : ''}
                     >
                       {response.attending ? 'Ja' : 'Nej'}
-                      {response.comment && (
-                        <span className="comment-indicator" title={response.comment}>
-                          *
-                        </span>
-                      )}
                     </td>
                   );
                 })}
@@ -105,28 +100,6 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
           })}
         </tbody>
       </table>
-      
-      <div className="comment-section">
-        <h3>Comments</h3>
-        {responses
-          .filter(r => 
-            r.comment && 
-            r.comment.trim() !== '' && 
-            upcomingRehearsals.some(reh => reh.id === r.rehearsal_id)
-          )
-          .map(response => {
-            const user = users.find(u => u.id === response.user_id);
-            const rehearsal = upcomingRehearsals.find(r => r.id === response.rehearsal_id);
-            
-            if (!user || !rehearsal) return null;
-            
-            return (
-              <div key={response.id} className="comment-item">
-                <strong>{user.username} ({formatDate(rehearsal.date)}):</strong> {response.comment}
-              </div>
-            );
-          })}
-      </div>
     </div>
   );
 };

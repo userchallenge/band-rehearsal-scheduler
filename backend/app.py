@@ -374,7 +374,7 @@ def update_response(response_id):
         'comment': response.comment
     }), 200
 
-# Utility functions
+# In app.py - modify the manage_rehearsals function
 @app.route('/api/rehearsals/manage', methods=['POST'])
 def manage_rehearsals():
     """
@@ -383,8 +383,11 @@ def manage_rehearsals():
     """
     current_user = get_user_from_token()
     
-    if not current_user or not current_user.is_admin:
-        return jsonify({"msg": "Admin privileges required"}), 403
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    # Allow any authenticated user to trigger this process
+    # Remove admin check: if not current_user.is_admin:
     
     # Remove past rehearsals
     today = datetime.now().date()

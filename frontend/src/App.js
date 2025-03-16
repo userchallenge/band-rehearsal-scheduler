@@ -22,25 +22,31 @@ function App() {
     setIsInitialized(true);
   }, []);
   
-  // Add a useEffect to listen for localStorage changes
+  // In src/App.js - modify the useEffect
   useEffect(() => {
-    const checkAuth = () => {
-      const token = getToken();
-      setIsAuthenticated(!!token);
+    // Check if user is authenticated
+    const token = getToken();
+    setIsAuthenticated(!!token);
+    
+    // If authenticated, try to manage rehearsals automatically
+    const autoManageRehearsals = async () => {
+      if (token) {
+        try {
+          const { manageRehearsals } = await import('./utils/api');
+          await manageRehearsals();
+          console.log('Rehearsals automatically updated on app load');
+        } catch (err) {
+          console.error('Error in auto rehearsal management:', err);
+          // Don't block app loading if this fails
+        }
+      }
     };
     
-    // Check authentication status every 500ms
-    const interval = setInterval(checkAuth, 500);
-    
-    // Listen for storage events (in case token is set in another tab)
-    window.addEventListener('storage', checkAuth);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('storage', checkAuth);
-    };
+    autoManageRehearsals();
+    setIsInitialized(true);
   }, []);
-  
+
+
   if (!isInitialized) {
     return <div>Loading...</div>;
   }

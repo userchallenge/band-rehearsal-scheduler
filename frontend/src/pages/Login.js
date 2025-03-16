@@ -3,7 +3,7 @@ import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
 import { loginUser, setToken } from '../utils/auth';
-import { manageRehearsals } from '../utils/api';
+// Don't import manageRehearsals here - we'll handle it differently
 import './Login.css';
 
 const Login = () => {
@@ -43,25 +43,27 @@ const Login = () => {
         isAdmin: data.is_admin
       }));
       
-      // Manage rehearsals automatically for any user login
-      try {
-        await manageRehearsals();
-        console.log('Rehearsals automatically updated on login');
-      } catch (rehearsalErr) {
-        console.error('Failed to automatically update rehearsals:', rehearsalErr);
-        // Don't block login if this fails
-      }
-      
       console.log('Navigating to dashboard...');
       
-      // Add a small delay to ensure context is updated
-      setTimeout(() => {
-        navigate('/');
-      }, 100);
+      // Navigate first, attempt to manage rehearsals later
+      navigate('/');
+      
+      // Try to manage rehearsals after navigation
+      // This way, even if it fails, the user still gets logged in
+      setTimeout(async () => {
+        try {
+          // Dynamically import the API functions to avoid circular dependencies
+          const api = await import('../utils/api');
+          await api.manageRehearsals();
+          console.log('Rehearsals automatically updated on login');
+        } catch (rehearsalErr) {
+          console.error('Failed to automatically update rehearsals:', rehearsalErr);
+        }
+      }, 500);
+      
     } catch (err) {
       console.error('Login error:', err);
       setError('Invalid username or password');
-    } finally {
       setLoading(false);
     }
   };

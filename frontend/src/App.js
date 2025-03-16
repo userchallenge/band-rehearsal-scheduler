@@ -17,13 +17,40 @@ function App() {
   useEffect(() => {
     // This effect runs when the component mounts
     const checkAuth = () => {
-      const token = getToken();
-      console.log("Checking auth:", token ? "Token found" : "No token");
-      setIsAuthenticated(!!token);
+      try {
+        const token = getToken();
+        const authenticated = !!token;
+        setIsAuthenticated(authenticated);
+        
+        // If not authenticated, ensure we're on the login page
+        if (!authenticated && window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      } catch (err) {
+        console.error("Error checking auth:", err);
+        setIsAuthenticated(false);
+      }
     };
     
     // Check immediately
     checkAuth();
+
+
+  // useEffect(() => {
+  //   // This effect runs when the component mounts
+  //   const checkAuth = () => {
+  //     try {
+  //       const token = getToken();
+  //       console.log("Checking auth:", token ? "Token found" : "No token");
+  //       setIsAuthenticated(!!token);
+  //     } catch (err) {
+  //       console.error("Error checking auth:", err);
+  //       setIsAuthenticated(false);
+  //     }
+  //   };
+    
+  //   // Check immediately
+  //   checkAuth();
     
     // If authenticated, try to manage rehearsals automatically
     const autoManageRehearsals = async () => {

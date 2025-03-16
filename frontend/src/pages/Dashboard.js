@@ -17,6 +17,9 @@ const Dashboard = () => {
     console.log("Dashboard user data:", user);
     
     const fetchData = async () => {
+      // Only fetch data if user is logged in
+      if (!user) return;
+      
       try {
         setLoading(true);
         const rehearsalsData = await getRehearsals();
@@ -52,7 +55,8 @@ const Dashboard = () => {
     }
   };
   
-  if (loading) {
+  // Show loading if we're still loading data or if user data isn't available yet
+  if (loading || !user) {
     return <div className="dashboard loading">Loading...</div>;
   }
   

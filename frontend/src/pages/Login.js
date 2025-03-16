@@ -1,4 +1,3 @@
-// src/pages/Login.js
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
@@ -15,18 +14,38 @@ const Login = () => {
   
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('Form submitted'); // Debug log
+    alert('Login button clicked'); // Simple alert to confirm click
+    
     setError('');
     setLoading(true);
     
     try {
+      console.log('Attempting login with username:', username);
+      
+      // Test API connectivity first
+      try {
+        const testResponse = await fetch('http://127.0.0.1:5000/api/test');
+        const testData = await testResponse.json();
+        console.log('API test successful:', testData);
+      } catch (testErr) {
+        console.error('API test failed:', testErr);
+      }
+      
+      // Proceed with actual login
       const data = await loginUser(username, password);
+      console.log('Login successful, data:', data);
+      
       setToken(data.access_token);
       setUser({
         id: data.user_id,
         isAdmin: data.is_admin
       });
+      
+      console.log('Navigating to dashboard...');
       navigate('/');
     } catch (err) {
+      console.error('Login error:', err);
       setError('Invalid username or password');
     } finally {
       setLoading(false);
@@ -67,31 +86,6 @@ const Login = () => {
       </div>
     </div>
   );
-};
-
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  console.log('Login form submitted');
-  setError('');
-  setLoading(true);
-  
-  try {
-    console.log('Attempting to login with:', username);
-    const data = await loginUser(username, password);
-    console.log('Login successful, received data:', data);
-    setToken(data.access_token);
-    setUser({
-      id: data.user_id,
-      isAdmin: data.is_admin
-    });
-    console.log('User state updated, navigating to dashboard');
-    navigate('/');
-  } catch (err) {
-    console.error('Login error:', err);
-    setError('Invalid username or password');
-  } finally {
-    setLoading(false);
-  }
 };
 
 export default Login;

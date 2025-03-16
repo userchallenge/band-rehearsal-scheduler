@@ -1,4 +1,3 @@
-// src/contexts/UserContext.js
 import React, { createContext, useState, useEffect } from 'react';
 import { getToken, getUserFromToken } from '../utils/auth';
 

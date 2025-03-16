@@ -343,6 +343,25 @@ def debug_token():
         "auth_header": auth_header
     }), 200
 
+@app.route('/api/check-token', methods=['GET'])
+def check_token():
+    auth_header = request.headers.get('Authorization', '')
+    token = None
+    
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]  # Remove 'Bearer ' prefix
+    
+    # Simple validation without actually checking signature
+    is_jwt_format = bool(token and '.' in token and len(token.split('.')) == 3)
+    
+    return jsonify({
+        "has_auth_header": bool(auth_header),
+        "auth_header": auth_header,
+        "token_extracted": token is not None,
+        "appears_to_be_jwt": is_jwt_format
+    }), 200
+
+
 
 @app.route('/api/test', methods=['GET'])
 def test_endpoint():

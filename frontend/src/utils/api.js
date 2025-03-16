@@ -123,3 +123,13 @@ export const debugToken = async () => {
     throw error;
   }
 };
+
+// Add this to your api.js file
+export const checkTokenStatus = () => {
+  const token = localStorage.getItem('band_app_token');
+  const hasToken = !!token;
+  const tokenPreview = hasToken ? `${token.substring(0, 15)}...` : 'No token found';
+  
+  console.log('Token check:', { hasToken, tokenPreview });
+  return { hasToken, tokenPreview };
+};

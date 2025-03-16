@@ -1,7 +1,7 @@
 // src/pages/Dashboard.js
 import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../contexts/UserContext';
-import { getRehearsals, getResponses, updateResponse, debugToken } from '../utils/api';
+import { getRehearsals, getResponses, updateResponse, checkTokenStatus } from '../utils/api';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -62,17 +62,6 @@ const Dashboard = () => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
-
-  const handleDebugToken = async () => {
-    const token = localStorage.getItem('band_app_token');
-    console.log('Stored token:', token);
-    try {
-      const data = await debugToken();
-      console.log('Debug result:', data);
-    } catch (err) {
-      console.error('Debug error:', err);
-    }
-  };
   
   if (loading) {
     return <div className="dashboard loading">Loading...</div>;
@@ -84,19 +73,62 @@ const Dashboard = () => {
       
       {error && <div className="error-message">{error}</div>}
       
-      {/* Debug Button */}
-      <button 
-        onClick={handleDebugToken}
-        style={{ 
-          marginBottom: '20px', 
-          padding: '8px 16px', 
-          backgroundColor: '#f5f5f5', 
-          border: '1px solid #ddd', 
-          borderRadius: '4px' 
-        }}
-      >
-        Debug Token
-      </button>
+      {/* Debug Section */}
+      <div style={{ 
+        margin: '20px 0', 
+        padding: '15px', 
+        backgroundColor: '#f5f5f5', 
+        border: '1px solid #ddd',
+        borderRadius: '4px'
+      }}>
+        <h3>Debug Tools</h3>
+        <button 
+          onClick={() => {
+            const status = checkTokenStatus();
+            alert(`Token status: ${status.hasToken ? 'Found' : 'Missing'}\n${status.tokenPreview}`);
+          }}
+          style={{ 
+            padding: '8px 16px', 
+            backgroundColor: '#2196f3', 
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            marginRight: '10px'
+          }}
+        >
+          Check Token
+        </button>
+        
+        <button 
+          onClick={() => {
+            try {
+              const token = localStorage.getItem('band_app_token');
+              fetch('http://127.0.0.1:5000/api/rehearsals', {
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
+              })
+              .then(res => {
+                alert(`Rehearsals request status: ${res.status} ${res.statusText}`);
+                return res.json().catch(() => ({ error: 'Failed to parse JSON' }));
+              })
+              .then(data => console.log('Response data:', data))
+              .catch(err => alert('Fetch error: ' + err.message));
+            } catch (err) {
+              alert('Error: ' + err.message);
+            }
+          }}
+          style={{ 
+            padding: '8px 16px', 
+            backgroundColor: '#4caf50', 
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px' 
+          }}
+        >
+          Test Rehearsals API
+        </button>
+      </div>
       
       <div className="dashboard-content">
         <div className="upcoming-rehearsal">

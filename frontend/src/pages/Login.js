@@ -1,3 +1,4 @@
+// src/pages/Login.js - Updated with better debugging
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
@@ -9,44 +10,71 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState('');
   const { setUser } = useContext(UserContext);
   const navigate = useNavigate();
   
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Form submitted'); // Debug log
-    alert('Login button clicked'); // Simple alert to confirm click
+    console.log('Form submitted');
+    setDebugInfo('Attempting login...');
     
     setError('');
     setLoading(true);
     
     try {
       console.log('Attempting login with username:', username);
+      setDebugInfo(`Logging in as ${username}...`);
       
       // Test API connectivity first
       try {
         const testResponse = await fetch('http://127.0.0.1:5000/api/test');
         const testData = await testResponse.json();
         console.log('API test successful:', testData);
+        setDebugInfo(prev => prev + '\nAPI test successful');
       } catch (testErr) {
         console.error('API test failed:', testErr);
+        setDebugInfo(prev => prev + '\nAPI test failed: ' + testErr.message);
       }
       
       // Proceed with actual login
       const data = await loginUser(username, password);
       console.log('Login successful, data:', data);
+      setDebugInfo(prev => prev + '\nLogin successful. Token received.');
       
+      if (!data.access_token) {
+        console.error('No access token in response!', data);
+        setError('Authentication error: No token received');
+        setDebugInfo(prev => prev + '\nERROR: No token in response!');
+        return;
+      }
+      
+      // Store token explicitly
+      localStorage.setItem('band_app_token', data.access_token);
+      console.log('Token stored in localStorage');
+      setDebugInfo(prev => prev + '\nToken stored in localStorage.');
+      
+      // Verify token was stored
+      const storedToken = localStorage.getItem('band_app_token');
+      console.log('Verified stored token:', storedToken ? `${storedToken.substring(0, 15)}...` : 'none');
+      setDebugInfo(prev => prev + '\nVerified token in storage: ' + (storedToken ? 'Yes' : 'No'));
+      
+      // This is just a compatibility call for your existing code
       setToken(data.access_token);
+      
+      // Set user context
       setUser({
         id: data.user_id,
         isAdmin: data.is_admin
       });
       
       console.log('Navigating to dashboard...');
+      setDebugInfo(prev => prev + '\nNavigating to dashboard...');
       navigate('/');
     } catch (err) {
       console.error('Login error:', err);
-      setError('Invalid username or password');
+      setDebugInfo(prev => prev + '\nERROR: ' + err.message);
+      setError('Login failed: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -83,6 +111,14 @@ const Login = () => {
             {loading ? 'Logging in...' : 'Log In'}
           </button>
         </form>
+        
+        {/* Debug info section */}
+        {debugInfo && (
+          <div style={{ marginTop: '20px', padding: '10px', backgroundColor: '#f0f0f0', borderRadius: '4px' }}>
+            <h3>Debug Info:</h3>
+            <pre style={{ whiteSpace: 'pre-wrap', overflow: 'auto' }}>{debugInfo}</pre>
+          </div>
+        )}
       </div>
     </div>
   );

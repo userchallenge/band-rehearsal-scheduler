@@ -426,5 +426,96 @@ def trigger_email():
     
     return jsonify({"msg": "Email sent successfully"}), 200
 
+@app.route('/api/users/<int:user_id>', methods=['GET'])
+def get_user(user_id):
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    user = User.query.get_or_404(user_id)
+    
+    return jsonify({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'is_admin': user.is_admin
+    }), 200
+
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+def update_user(user_id):
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+    
+    # Check for username and email conflicts
+    if data.get('username') and data.get('username') != user.username:
+        if User.query.filter_by(username=data.get('username')).first():
+            return jsonify({"msg": "Username already exists"}), 400
+    
+    if data.get('email') and data.get('email') != user.email:
+        if User.query.filter_by(email=data.get('email')).first():
+            return jsonify({"msg": "Email already exists"}), 400
+    
+    # Update user fields
+    if data.get('username'):
+        user.username = data.get('username')
+    
+    if data.get('email'):
+        user.email = data.get('email')
+    
+    if data.get('first_name') is not None:
+        user.first_name = data.get('first_name')
+    
+    if data.get('last_name') is not None:
+        user.last_name = data.get('last_name')
+    
+    if data.get('is_admin') is not None:
+        user.is_admin = data.get('is_admin')
+    
+    # Only update password if provided
+    if data.get('password'):
+        user.set_password(data.get('password'))
+    
+    db.session.commit()
+    
+    return jsonify({
+        'id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'is_admin': user.is_admin
+    }), 200
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    # Prevent admin from deleting themselves
+    if current_user.id == user_id:
+        return jsonify({"msg": "You cannot delete your own account"}), 400
+    
+    user = User.query.get_or_404(user_id)
+    
+    # Delete all responses for this user
+    Response.query.filter_by(user_id=user_id).delete()
+    
+    # Delete the user
+    db.session.delete(user)
+    db.session.commit()
+    
+    return jsonify({"msg": "User deleted successfully"}), 200
+
+
 if __name__ == '__main__':
     app.run(debug=True)

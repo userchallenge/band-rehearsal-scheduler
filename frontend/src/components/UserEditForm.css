@@ -1,0 +1,108 @@
+/* src/components/UserEditForm.css */
+.user-edit-form {
+    background-color: white;
+    border-radius: 4px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .user-edit-form h3 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: #333;
+  }
+  
+  .form-group {
+    margin-bottom: 1rem;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #444;
+  }
+  
+  .form-group .optional {
+    font-weight: normal;
+    font-size: 0.9em;
+    color: #666;
+    font-style: italic;
+  }
+  
+  .form-group input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+  }
+  
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .form-checkbox {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+  
+  .form-checkbox input {
+    margin-right: 0.5rem;
+  }
+  
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+  }
+  
+  .cancel-button, .save-button {
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  
+  .cancel-button {
+    background-color: white;
+    border: 1px solid #ddd;
+    color: #333;
+  }
+  
+  .save-button {
+    background-color: #2196f3;
+    border: none;
+    color: white;
+  }
+  
+  .save-button:disabled {
+    background-color: #90caf9;
+    cursor: not-allowed;
+  }
+  
+  .form-error {
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 0.75rem;
+    margin-bottom: 1.5rem;
+    border-radius: 4px;
+    border-left: 3px solid #c62828;
+  }
+  
+  .loading {
+    padding: 2rem;
+    text-align: center;
+    color: #666;
+  }
+  
+  @media (max-width: 768px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+  }

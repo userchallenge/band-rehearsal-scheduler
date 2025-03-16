@@ -1,8 +1,10 @@
 // src/pages/AdminPanel.js
 import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../contexts/UserContext';
-import { getUsers, createUser, getRehearsals } from '../utils/api';
+import { getUsers, createUser, getRehearsals, deleteUser } from '../utils/api';
 import AddRehearsalForm from '../components/AddRehearsalForm';
+import UserEditForm from '../components/UserEditForm';
+
 import './AdminPanel.css';
 
 const AdminPanel = () => {
@@ -24,6 +26,12 @@ const AdminPanel = () => {
     is_admin: false
   });
   
+  // Edit user state
+  const [editingUserId, setEditingUserId] = useState(null);
+  
+  // Confirm delete dialog
+  const [deleteConfirmUserId, setDeleteConfirmUserId] = useState(null);
+  
   useEffect(() => {
     // Redirect if not admin
     if (user && !user.isAdmin) {
@@ -31,26 +39,26 @@ const AdminPanel = () => {
       return;
     }
     
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [usersData, rehearsalsData] = await Promise.all([
-          getUsers(),
-          getRehearsals()
-        ]);
-        
-        setUsers(usersData);
-        setRehearsals(rehearsalsData.sort((a, b) => new Date(a.date) - new Date(b.date)));
-        setLoading(false);
-      } catch (err) {
-        console.error('Failed to load data:', err);
-        setError('Failed to load data. Please try again later.');
-        setLoading(false);
-      }
-    };
-    
     fetchData();
   }, [user]);
+  
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [usersData, rehearsalsData] = await Promise.all([
+        getUsers(),
+        getRehearsals()
+      ]);
+      
+      setUsers(usersData);
+      setRehearsals(rehearsalsData.sort((a, b) => new Date(a.date) - new Date(b.date)));
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      setError('Failed to load data. Please try again later.');
+      setLoading(false);
+    }
+  };
   
   const handleNewUserChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -81,6 +89,44 @@ const AdminPanel = () => {
     } catch (err) {
       console.error('Failed to create user:', err);
       setError('Failed to create user. Please try again.');
+    }
+  };
+  
+  const handleEditUser = (userId) => {
+    setEditingUserId(userId);
+    // Hide success/error messages when opening edit form
+    setSuccess(null);
+    setError(null);
+  };
+  
+  const handleCancelEdit = () => {
+    setEditingUserId(null);
+  };
+  
+  const handleUserUpdated = () => {
+    fetchData(); // Refresh data
+    setEditingUserId(null); // Close edit form
+    setSuccess('User updated successfully.');
+  };
+  
+  const handleConfirmDelete = (userId) => {
+    setDeleteConfirmUserId(userId);
+  };
+  
+  const handleCancelDelete = () => {
+    setDeleteConfirmUserId(null);
+  };
+  
+  const handleDeleteUser = async (userId) => {
+    try {
+      await deleteUser(userId);
+      setUsers(users.filter(u => u.id !== userId));
+      setDeleteConfirmUserId(null);
+      setSuccess('User deleted successfully.');
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      setError('Failed to delete user. Please try again.');
+      setDeleteConfirmUserId(null);
     }
   };
   
@@ -119,12 +165,16 @@ const AdminPanel = () => {
             <h2>Users Management</h2>
             <button 
               className="add-button"
-              onClick={() => setShowNewUserForm(!showNewUserForm)}
+              onClick={() => {
+                setShowNewUserForm(!showNewUserForm);
+                setEditingUserId(null); // Close edit form if open
+              }}
             >
               {showNewUserForm ? 'Cancel' : 'Add User'}
             </button>
           </div>
           
+          {/* New User Form */}
           {showNewUserForm && (
             <form className="form" onSubmit={handleCreateUser}>
               <div className="form-group">
@@ -202,6 +252,16 @@ const AdminPanel = () => {
             </form>
           )}
           
+          {/* Edit User Form */}
+          {editingUserId && (
+            <UserEditForm 
+              userId={editingUserId}
+              onCancel={handleCancelEdit}
+              onSuccess={handleUserUpdated}
+            />
+          )}
+          
+          {/* Users List */}
           <div className="users-list">
             <h3>Current Users</h3>
             <table>
@@ -211,26 +271,69 @@ const AdminPanel = () => {
                   <th>Email</th>
                   <th>Name</th>
                   <th>Role</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map(user => (
-                  <tr key={user.id}>
-                    <td>{user.username}</td>
-                    <td>{user.email}</td>
-                    <td>{`${user.first_name || ''} ${user.last_name || ''}`}</td>
-                    <td>{user.is_admin ? 'Admin' : 'Member'}</td>
+                {users.map(u => (
+                  <tr key={u.id}>
+                    <td>{u.username}</td>
+                    <td>{u.email}</td>
+                    <td>{`${u.first_name || ''} ${u.last_name || ''}`}</td>
+                    <td>{u.is_admin ? 'Admin' : 'Member'}</td>
+                    <td className="action-cell">
+                      <button 
+                        className="edit-button" 
+                        onClick={() => handleEditUser(u.id)}
+                        title="Edit user"
+                      >
+                        Edit
+                      </button>
+                      
+                      {user.id !== u.id && (
+                        <button 
+                          className="delete-button" 
+                          onClick={() => handleConfirmDelete(u.id)}
+                          title="Delete user"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          
+          {/* Delete Confirmation Dialog */}
+          {deleteConfirmUserId && (
+            <div className="confirm-dialog-overlay">
+              <div className="confirm-dialog">
+                <h3>Confirm Deletion</h3>
+                <p>Are you sure you want to delete this user? This action cannot be undone.</p>
+                <div className="dialog-actions">
+                  <button 
+                    className="cancel-button"
+                    onClick={handleCancelDelete}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    className="delete-button"
+                    onClick={() => handleDeleteUser(deleteConfirmUserId)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         
         <div className="admin-section">
           <div className="section-header">
             <h2>Rehearsal Management</h2>
-            {/* Removed the Manage Rehearsals and Send Summary Email buttons */}
           </div>
           
           <AddRehearsalForm onSuccess={refreshData} />

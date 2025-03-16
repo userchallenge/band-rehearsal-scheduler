@@ -28,16 +28,25 @@ export const getUserFromToken = (token) => {
 };
 
 export const loginUser = async (username, password) => {
-  const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://127.0.0.1:5000'}/api/auth/login`, {
+  const BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5000/api';
+  const loginUrl = `${BASE_URL}/auth/login`;
+  
+  console.log('Sending login request to:', loginUrl);
+  
+  const response = await fetch(loginUrl, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
     },
+    credentials: 'include', // Include cookies if your API uses them
     body: JSON.stringify({ username, password })
   });
 
   if (!response.ok) {
-    throw new Error('Login failed');
+    const errorData = await response.json().catch(() => ({}));
+    console.error('Login failed:', errorData);
+    throw new Error(errorData.msg || 'Login failed');
   }
 
   return response.json();

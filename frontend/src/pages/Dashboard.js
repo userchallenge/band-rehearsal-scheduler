@@ -1,7 +1,7 @@
 // src/pages/Dashboard.js
 import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../contexts/UserContext';
-import { getRehearsals, getResponses, updateResponse } from '../utils/api';
+import { getRehearsals, getResponses, updateResponse, debugToken } from '../utils/api';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -22,6 +22,7 @@ const Dashboard = () => {
         setResponses(responsesData);
         setLoading(false);
       } catch (err) {
+        console.error("Error fetching data:", err);
         setError('Failed to load data. Please try again later.');
         setLoading(false);
       }
@@ -61,6 +62,17 @@ const Dashboard = () => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
+
+  const handleDebugToken = async () => {
+    const token = localStorage.getItem('band_app_token');
+    console.log('Stored token:', token);
+    try {
+      const data = await debugToken();
+      console.log('Debug result:', data);
+    } catch (err) {
+      console.error('Debug error:', err);
+    }
+  };
   
   if (loading) {
     return <div className="dashboard loading">Loading...</div>;
@@ -71,6 +83,20 @@ const Dashboard = () => {
       <h1>Welcome to Band Rehearsal Scheduler</h1>
       
       {error && <div className="error-message">{error}</div>}
+      
+      {/* Debug Button */}
+      <button 
+        onClick={handleDebugToken}
+        style={{ 
+          marginBottom: '20px', 
+          padding: '8px 16px', 
+          backgroundColor: '#f5f5f5', 
+          border: '1px solid #ddd', 
+          borderRadius: '4px' 
+        }}
+      >
+        Debug Token
+      </button>
       
       <div className="dashboard-content">
         <div className="upcoming-rehearsal">

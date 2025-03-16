@@ -1,13 +1,18 @@
 # app.py
-from flask import Flask, request, jsonify, session
-from flask_cors import CORS
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from email_service import send_rehearsal_summary
-from models import db, User, Rehearsal, Response, LogEntry
+from flask import Flask, jsonify, request, session
+from flask_cors import CORS
+from flask_jwt_extended import (JWTManager, create_access_token,
+                                get_jwt_identity, jwt_required)
+from flask_jwt_extended.exceptions import (InvalidHeaderError,
+                                           NoAuthorizationError)
+from models import LogEntry, Rehearsal, Response, User, db
+from werkzeug.exceptions import UnprocessableEntity
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -16,14 +21,16 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:/
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-key')  # Change in production
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+app.config['JWT_TOKEN_LOCATION'] = ['headers']
+app.config['JWT_HEADER_NAME'] = 'Authorization'
+app.config['JWT_HEADER_TYPE'] = 'Bearer'
 
 # Initialize extensions
 db.init_app(app)
 jwt = JWTManager(app)
 CORS(app)
-# In app.py
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 # Set up scheduler for weekly emails
 scheduler = BackgroundScheduler()
 scheduler.add_job(send_rehearsal_summary, 'cron', day_of_week='mon', hour=8, minute=0)
@@ -313,6 +320,29 @@ def trigger_email():
     send_rehearsal_summary()
     
     return jsonify({"msg": "Email sent successfully"}), 200
+
+@app.errorhandler(UnprocessableEntity)
+def handle_unprocessable_entity(e):
+    return jsonify({"msg": "Invalid token. Please log in again."}), 422
+
+@app.errorhandler(NoAuthorizationError)
+def handle_auth_error(e):
+    return jsonify({"msg": "Missing Authorization header. Please log in."}), 401
+
+@app.errorhandler(InvalidHeaderError)
+def handle_invalid_header(e):
+    return jsonify({"msg": "Invalid Authorization header. Format should be 'Bearer <token>'"}), 422
+
+@app.route('/api/debug-token', methods=['GET'])
+def debug_token():
+    auth_header = request.headers.get('Authorization', '')
+    
+    return jsonify({
+        "message": "Token debug info",
+        "has_auth_header": bool(auth_header),
+        "auth_header": auth_header
+    }), 200
+
 
 @app.route('/api/test', methods=['GET'])
 def test_endpoint():

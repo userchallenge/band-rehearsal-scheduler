@@ -1,0 +1,8 @@
+flask
+flask-sqlalchemy
+flask-cors
+flask-jwt-extended
+werkzeug
+apscheduler
+python-dotenv
+gunicorn

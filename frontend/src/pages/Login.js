@@ -1,4 +1,4 @@
-// src/pages/Login.js - Updated with better debugging
+// src/pages/Login.js
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
@@ -26,18 +26,6 @@ const Login = () => {
       console.log('Attempting login with username:', username);
       setDebugInfo(`Logging in as ${username}...`);
       
-      // Test API connectivity first
-      try {
-        const testResponse = await fetch('http://127.0.0.1:5000/api/test');
-        const testData = await testResponse.json();
-        console.log('API test successful:', testData);
-        setDebugInfo(prev => prev + '\nAPI test successful');
-      } catch (testErr) {
-        console.error('API test failed:', testErr);
-        setDebugInfo(prev => prev + '\nAPI test failed: ' + testErr.message);
-      }
-      
-      // Proceed with actual login
       const data = await loginUser(username, password);
       console.log('Login successful, data:', data);
       setDebugInfo(prev => prev + '\nLogin successful. Token received.');
@@ -67,10 +55,14 @@ const Login = () => {
         id: data.user_id,
         isAdmin: data.is_admin
       });
+      console.log('User context updated:', { id: data.user_id, isAdmin: data.is_admin });
       
-      console.log('Navigating to dashboard...');
-      setDebugInfo(prev => prev + '\nNavigating to dashboard...');
-      navigate('/');
+      // Add a short delay to ensure state updates are processed
+      setTimeout(() => {
+        console.log('Navigating to dashboard...');
+        setDebugInfo(prev => prev + '\nNavigating to dashboard...');
+        navigate('/');
+      }, 100);
     } catch (err) {
       console.error('Login error:', err);
       setDebugInfo(prev => prev + '\nERROR: ' + err.message);

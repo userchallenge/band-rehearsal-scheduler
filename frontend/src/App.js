@@ -12,12 +12,38 @@ import './App.css';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   useEffect(() => {
     // Check if user is authenticated
     const token = getToken();
+    console.log("App.js - Auth check:", token ? "Token found" : "No token found");
     setIsAuthenticated(!!token);
+    setIsInitialized(true);
   }, []);
+  
+  // Add a useEffect to listen for localStorage changes
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = getToken();
+      setIsAuthenticated(!!token);
+    };
+    
+    // Check authentication status every 500ms
+    const interval = setInterval(checkAuth, 500);
+    
+    // Listen for storage events (in case token is set in another tab)
+    window.addEventListener('storage', checkAuth);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', checkAuth);
+    };
+  }, []);
+  
+  if (!isInitialized) {
+    return <div>Loading...</div>;
+  }
   
   return (
     <UserProvider>

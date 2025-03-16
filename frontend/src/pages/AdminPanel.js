@@ -1,7 +1,7 @@
 // src/pages/AdminPanel.js
 import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../contexts/UserContext';
-import { getUsers, createUser, getRehearsals, manageRehearsals, sendEmail } from '../utils/api';
+import { getUsers, createUser, getRehearsals } from '../utils/api';
 import AddRehearsalForm from '../components/AddRehearsalForm';
 import './AdminPanel.css';
 
@@ -81,35 +81,6 @@ const AdminPanel = () => {
     } catch (err) {
       console.error('Failed to create user:', err);
       setError('Failed to create user. Please try again.');
-    }
-  };
-  
-  const handleManageRehearsals = async () => {
-    setError(null);
-    setSuccess(null);
-    
-    try {
-      await manageRehearsals();
-      // Refresh rehearsals data
-      const rehearsalsData = await getRehearsals();
-      setRehearsals(rehearsalsData.sort((a, b) => new Date(a.date) - new Date(b.date)));
-      setSuccess('Rehearsals updated successfully.');
-    } catch (err) {
-      console.error('Failed to manage rehearsals:', err);
-      setError('Failed to manage rehearsals. Please try again.');
-    }
-  };
-  
-  const handleSendEmail = async () => {
-    setError(null);
-    setSuccess(null);
-    
-    try {
-      await sendEmail();
-      setSuccess('Email sent successfully.');
-    } catch (err) {
-      console.error('Failed to send email:', err);
-      setError('Failed to send email. Please try again.');
     }
   };
   
@@ -259,20 +230,7 @@ const AdminPanel = () => {
         <div className="admin-section">
           <div className="section-header">
             <h2>Rehearsal Management</h2>
-            <div className="button-group">
-              <button 
-                className="action-button"
-                onClick={handleManageRehearsals}
-              >
-                Manage Rehearsals
-              </button>
-              <button 
-                className="action-button"
-                onClick={handleSendEmail}
-              >
-                Send Summary Email
-              </button>
-            </div>
+            {/* Removed the Manage Rehearsals and Send Summary Email buttons */}
           </div>
           
           <AddRehearsalForm onSuccess={refreshData} />
@@ -300,9 +258,8 @@ const AdminPanel = () => {
           <div className="help-section">
             <h3>Quick Help</h3>
             <ul>
-              <li><strong>Add Rehearsal</strong>: Create a new rehearsal date.</li>
-              <li><strong>Manage Rehearsals</strong>: Remove past rehearsals and add new ones automatically.</li>
-              <li><strong>Send Summary Email</strong>: Send an email to all band members with the upcoming rehearsal schedule.</li>
+              <li><strong>Add Rehearsal</strong>: Create a new rehearsal date or recurring schedule.</li>
+              <li><strong>Auto Management</strong>: Past rehearsals are automatically removed and new ones added when users log in.</li>
             </ul>
           </div>
         </div>
@@ -311,4 +268,4 @@ const AdminPanel = () => {
   );
 };
 
-export default AdminPanel;  
+export default AdminPanel;

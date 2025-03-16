@@ -1,8 +1,10 @@
 // src/pages/Dashboard.js
 import React, { useState, useEffect, useContext } from 'react';
+import { Link } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
 import { getRehearsals, getResponses, updateResponse } from '../utils/api';
 import './Dashboard.css';
+
 
 // Debug Button Component
 const DebugButton = () => {
@@ -171,11 +173,11 @@ const Dashboard = () => {
           <h2>Quick Links</h2>
           <ul>
             <li>
-              <a href="/schedule">View Complete Schedule</a>
+              <Link to="/schedule">View Complete Schedule</Link>
             </li>
             {user && user.isAdmin && (
               <li>
-                <a href="/admin">Admin Panel</a>
+                <Link to="/admin">Admin Panel</Link>
               </li>
             )}
           </ul>

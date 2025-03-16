@@ -1,211 +1,160 @@
 /* src/pages/RehearsalSchedule.css */
 .schedule {
-    padding: 2rem;
-    max-width: 1200px;
-    margin: 0 auto;
-  }
-  
-  .schedule h1 {
-    margin-bottom: 2rem;
-    color: #333;
-    font-size: 2rem;
-  }
-  
-  .schedule-table-container {
-    overflow-x: auto;
-  }
-  
-  .schedule-table {
-    width: 100%;
-    border-collapse: collapse;
-    background-color: white;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  .schedule-table th,
-  .schedule-table td {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.schedule h1 {
+  margin-bottom: 1.5rem;
+  color: #333;
+  font-size: 2rem;
+}
+
+.schedule-tabs {
+  display: flex;
+  margin-bottom: 1.5rem;
+}
+
+.tab-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.tab-button.active {
+  background-color: white;
+  border-bottom: 2px solid white;
+  position: relative;
+  z-index: 1;
+}
+
+.schedule-view {
+  margin-bottom: 2rem;
+}
+
+.user-responses {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.user-responses h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.add-comment-button {
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  margin-top: 1rem;
+}
+
+.add-comment-button:hover {
+  background-color: #1976d2;
+}
+
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 0.75rem;
+  margin-bottom: 1.5rem;
+  border-radius: 4px;
+  border-left: 3px solid #c62828;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+}
+
+.modal h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.modal textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.cancel-button, .save-button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.cancel-button {
+  background-color: white;
+  border: 1px solid #ddd;
+  color: #333;
+}
+
+.save-button {
+  background-color: #2196f3;
+  border: none;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .schedule {
     padding: 1rem;
-    border: 1px solid #eee;
-    text-align: center;
-  }
-  
-  .schedule-table th {
-    background-color: #f5f5f5;
-    font-weight: 600;
-    color: #333;
-  }
-  
-  .schedule-table th.current-user {
-    background-color: #e3f2fd;
-    color: #1976d2;
-  }
-  
-  .date-cell {
-    text-align: left;
-    font-weight: 500;
-    min-width: 180px;
-  }
-  
-  .response-cell {
-    position: relative;
-  }
-  
-  .response-cell.attending {
-    background-color: rgba(76, 175, 80, 0.1);
-  }
-  
-  .response-cell.not-attending {
-    background-color: rgba(244, 67, 54, 0.1);
-  }
-  
-  .response-controls {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  
-  .button-group {
-    display: flex;
-    gap: 0.5rem;
-  }
-  
-  .response-button {
-    padding: 0.25rem 0.75rem;
-    border: 1px solid #ddd;
-    background-color: white;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    width: auto;
-  }
-  
-  .response-button.active {
-    background-color: #2196f3;
-    color: white;
-    border-color: #2196f3;
-  }
-  
-  .comment-button {
-    font-size: 0.8rem;
-    background: none;
-    border: none;
-    color: #2196f3;
-    cursor: pointer;
-    padding: 0;
-    text-decoration: underline;
-    width: auto;
-  }
-  
-  .response-status {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-  
-  .comment-indicator {
-    cursor: pointer;
-    font-size: 1rem;
-  }
-  
-  .error-message {
-    background-color: #ffebee;
-    color: #c62828;
-    padding: 0.75rem;
-    margin-bottom: 1.5rem;
-    border-radius: 4px;
-    border-left: 3px solid #c62828;
-  }
-  
-  .loading {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 300px;
-    font-size: 1.2rem;
-    color: #666;
-  }
-  
-  /* Modal styles */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
   }
   
   .modal {
-    background-color: white;
-    padding: 2rem;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 500px;
+    padding: 1.5rem;
+    width: 95%;
   }
-  
-  .modal h2 {
-    margin-top: 0;
-    margin-bottom: 1rem;
-    color: #333;
-  }
-  
-  .modal textarea {
-    width: 100%;
-    padding: 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-family: inherit;
-    font-size: 1rem;
-    margin-bottom: 1.5rem;
-  }
-  
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 1rem;
-  }
-  
-  .cancel-button, .save-button {
-    padding: 0.75rem 1.5rem;
-    border-radius: 4px;
-    font-size: 1rem;
-    cursor: pointer;
-    width: auto;
-  }
-  
-  .cancel-button {
-    background-color: white;
-    border: 1px solid #ddd;
-    color: #333;
-  }
-  
-  .save-button {
-    background-color: #2196f3;
-    border: none;
-    color: white;
-  }
-  
-  @media (max-width: 768px) {
-    .schedule-table th,
-    .schedule-table td {
-      padding: 0.75rem 0.5rem;
-      font-size: 0.9rem;
-    }
-    
-    .date-cell {
-      min-width: 140px;
-    }
-    
-    .response-button {
-      padding: 0.25rem 0.5rem;
-      font-size: 0.8rem;
-    }
-  }
+}

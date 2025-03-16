@@ -1,7 +1,8 @@
 // src/pages/AdminPanel.js
 import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../contexts/UserContext';
-import { getUsers, createUser, getRehearsals, createRehearsal, manageRehearsals, sendEmail } from '../utils/api';
+import { getUsers, createUser, getRehearsals, manageRehearsals, sendEmail } from '../utils/api';
+import AddRehearsalForm from '../components/AddRehearsalForm';
 import './AdminPanel.css';
 
 const AdminPanel = () => {
@@ -23,10 +24,6 @@ const AdminPanel = () => {
     is_admin: false
   });
   
-  // New rehearsal form state
-  const [showNewRehearsalForm, setShowNewRehearsalForm] = useState(false);
-  const [newRehearsalDate, setNewRehearsalDate] = useState('');
-  
   useEffect(() => {
     // Redirect if not admin
     if (user && !user.isAdmin) {
@@ -46,6 +43,7 @@ const AdminPanel = () => {
         setRehearsals(rehearsalsData.sort((a, b) => new Date(a.date) - new Date(b.date)));
         setLoading(false);
       } catch (err) {
+        console.error('Failed to load data:', err);
         setError('Failed to load data. Please try again later.');
         setLoading(false);
       }
@@ -81,23 +79,8 @@ const AdminPanel = () => {
       setShowNewUserForm(false);
       setSuccess('User created successfully.');
     } catch (err) {
+      console.error('Failed to create user:', err);
       setError('Failed to create user. Please try again.');
-    }
-  };
-  
-  const handleCreateRehearsal = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    
-    try {
-      const createdRehearsal = await createRehearsal(newRehearsalDate);
-      setRehearsals([...rehearsals, createdRehearsal].sort((a, b) => new Date(a.date) - new Date(b.date)));
-      setNewRehearsalDate('');
-      setShowNewRehearsalForm(false);
-      setSuccess('Rehearsal created successfully.');
-    } catch (err) {
-      setError('Failed to create rehearsal. Please try again.');
     }
   };
   
@@ -112,6 +95,7 @@ const AdminPanel = () => {
       setRehearsals(rehearsalsData.sort((a, b) => new Date(a.date) - new Date(b.date)));
       setSuccess('Rehearsals updated successfully.');
     } catch (err) {
+      console.error('Failed to manage rehearsals:', err);
       setError('Failed to manage rehearsals. Please try again.');
     }
   };
@@ -124,6 +108,7 @@ const AdminPanel = () => {
       await sendEmail();
       setSuccess('Email sent successfully.');
     } catch (err) {
+      console.error('Failed to send email:', err);
       setError('Failed to send email. Please try again.');
     }
   };
@@ -131,6 +116,15 @@ const AdminPanel = () => {
   const formatDate = (dateString) => {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+  
+  const refreshData = async () => {
+    try {
+      const rehearsalsData = await getRehearsals();
+      setRehearsals(rehearsalsData.sort((a, b) => new Date(a.date) - new Date(b.date)));
+    } catch (err) {
+      console.error('Failed to refresh data:', err);
+    }
   };
   
   if (loading) {
@@ -267,12 +261,6 @@ const AdminPanel = () => {
             <h2>Rehearsal Management</h2>
             <div className="button-group">
               <button 
-                className="add-button"
-                onClick={() => setShowNewRehearsalForm(!showNewRehearsalForm)}
-              >
-                {showNewRehearsalForm ? 'Cancel' : 'Add Rehearsal'}
-              </button>
-              <button 
                 className="action-button"
                 onClick={handleManageRehearsals}
               >
@@ -287,22 +275,7 @@ const AdminPanel = () => {
             </div>
           </div>
           
-          {showNewRehearsalForm && (
-            <form className="form" onSubmit={handleCreateRehearsal}>
-              <div className="form-group">
-                <label htmlFor="rehearsal_date">Date</label>
-                <input
-                  id="rehearsal_date"
-                  type="date"
-                  value={newRehearsalDate}
-                  onChange={(e) => setNewRehearsalDate(e.target.value)}
-                  required
-                />
-              </div>
-              
-              <button type="submit" className="submit-button">Create Rehearsal</button>
-            </form>
-          )}
+          <AddRehearsalForm onSuccess={refreshData} />
           
           <div className="rehearsals-list">
             <h3>Upcoming Rehearsals</h3>

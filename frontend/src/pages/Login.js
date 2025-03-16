@@ -29,6 +29,9 @@ const Login = () => {
       
       // Store token
       setToken(data.access_token);
+
+      // Dispatch a custom event to notify app of authentication change
+      window.dispatchEvent(new Event('auth-changed'));
       
       // Save user info in context
       console.log('Setting user context with:', { id: data.user_id, isAdmin: data.is_admin });

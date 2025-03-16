@@ -27,7 +27,7 @@ const Navbar = () => {
         <li>
           <Link to="/schedule">Schedule</Link>
         </li>
-        {user && user.isAdmin && (
+        {user && user.isAdmin === true && (
           <li>
             <Link to="/admin">Admin</Link>
           </li>

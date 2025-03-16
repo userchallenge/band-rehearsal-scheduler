@@ -23,29 +23,60 @@ function App() {
   }, []);
   
   // In src/App.js - modify the useEffect
-  useEffect(() => {
-    // Check if user is authenticated
-    const token = getToken();
-    setIsAuthenticated(!!token);
+  // useEffect(() => {
+  //   // Check if user is authenticated
+  //   const token = getToken();
+  //   setIsAuthenticated(!!token);
     
-    // If authenticated, try to manage rehearsals automatically
-    const autoManageRehearsals = async () => {
-      if (token) {
-        try {
-          const { manageRehearsals } = await import('./utils/api');
-          await manageRehearsals();
-          console.log('Rehearsals automatically updated on app load');
-        } catch (err) {
-          console.error('Error in auto rehearsal management:', err);
-          // Don't block app loading if this fails
-        }
-      }
+  //   // If authenticated, try to manage rehearsals automatically
+  //   const autoManageRehearsals = async () => {
+  //     if (token) {
+  //       try {
+  //         const { manageRehearsals } = await import('./utils/api');
+  //         await manageRehearsals();
+  //         console.log('Rehearsals automatically updated on app load');
+  //       } catch (err) {
+  //         console.error('Error in auto rehearsal management:', err);
+  //         // Don't block app loading if this fails
+  //       }
+  //     }
+  //   };
+    
+  //   autoManageRehearsals();
+  //   setIsInitialized(true);
+  // }, []);
+
+
+  // In App.js - add this useEffect to listen for authentication changes
+  useEffect(() => {
+    // This effect runs when the component mounts
+    const checkAuth = () => {
+      const token = getToken();
+      console.log("Checking auth:", token ? "Token found" : "No token");
+      setIsAuthenticated(!!token);
     };
     
-    autoManageRehearsals();
-    setIsInitialized(true);
+    // Check immediately
+    checkAuth();
+    
+    // Set up a listener for storage events (if token changes in another tab)
+    const handleStorageChange = (e) => {
+      if (e.key === 'band_app_token') {
+        checkAuth();
+      }
+    };
+    const handleAuthChanged = () => {
+      checkAuth();
+    };
+    
+    window.addEventListener('auth-changed', handleAuthChanged);
+    
+    
+    // Clean up event listener
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
-
 
   if (!isInitialized) {
     return <div>Loading...</div>;

@@ -1,102 +1,124 @@
 /* src/components/ScheduleTable.css */
 .schedule-table-container {
-    width: 100%;
-    margin-bottom: 2rem;
-  }
-  
-  .schedule-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    background-color: white;
-  }
-  
+  width: 100%;
+  margin-bottom: 2rem;
+  overflow-x: auto;
+}
+
+.schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: white;
+}
+
+.schedule-table th,
+.schedule-table td {
+  padding: 0.75rem;
+  text-align: center;
+  border: 1px solid #ddd;
+}
+
+.name-header {
+  text-align: left;
+  background-color: #f5f5f5;
+  font-weight: 600;
+  min-width: 120px;
+}
+
+.date-header {
+  background-color: #f5f5f5;
+  font-weight: 600;
+  min-width: 140px;
+  padding: 0.5rem;
+}
+
+.date-header-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.rehearsal-time {
+  font-size: 0.85rem;
+  color: #555;
+  margin-top: 0.3rem;
+}
+
+.rehearsal-title {
+  font-size: 0.85rem;
+  margin-top: 0.3rem;
+  font-style: italic;
+}
+
+.rehearsal-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  justify-content: center;
+}
+
+.edit-button, .delete-button {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.7rem;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  color: white;
+}
+
+.edit-button {
+  background-color: #2196f3;
+}
+
+.delete-button {
+  background-color: #f44336;
+}
+
+.name-cell {
+  text-align: left;
+  font-weight: 500;
+}
+
+.response-cell {
+  cursor: default;
+  position: relative;
+}
+
+.response-cell.attending {
+  background-color: rgba(0, 200, 0, 0.1);
+}
+
+.response-cell.not-attending {
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+.current-user-row {
+  background-color: rgba(33, 150, 243, 0.05);
+}
+
+.current-user-cell {
+  cursor: pointer;
+}
+
+.current-user-cell:hover {
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
   .schedule-table th,
   .schedule-table td {
-    padding: 0.75rem;
-    text-align: center;
-    border: 1px solid #ddd;
-  }
-  
-  .name-header {
-    text-align: left;
-    background-color: #f5f5f5;
-    font-weight: 600;
+    padding: 0.5rem;
+    font-size: 0.9rem;
   }
   
   .date-header {
-    background-color: #f5f5f5;
-    font-weight: 600;
+    min-width: 100px;
   }
   
-  .name-cell {
-    text-align: left;
-    font-weight: 500;
+  .edit-button, .delete-button {
+    padding: 0.15rem 0.3rem;
+    font-size: 0.65rem;
   }
-  
-  .response-cell {
-    cursor: default;
-    position: relative;
-  }
-  
-  .response-cell.attending {
-    background-color: rgba(0, 200, 0, 0.1);
-  }
-  
-  .response-cell.not-attending {
-    background-color: rgba(255, 0, 0, 0.1);
-  }
-  
-  .current-user-row {
-    background-color: rgba(33, 150, 243, 0.05);
-  }
-  
-  .current-user-cell {
-    cursor: pointer;
-  }
-  
-  .current-user-cell:hover {
-    opacity: 0.8;
-  }
-  
-  .comment-indicator {
-    position: absolute;
-    top: 3px;
-    right: 3px;
-    font-size: 0.8rem;
-    color: #777;
-  }
-  
-  .comment-section {
-    background-color: white;
-    padding: 1.5rem;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  .comment-section h3 {
-    margin-top: 0;
-    margin-bottom: 1rem;
-    color: #333;
-  }
-  
-  .comment-item {
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid #eee;
-  }
-  
-  .comment-item:last-child {
-    margin-bottom: 0;
-    padding-bottom: 0;
-    border-bottom: none;
-  }
-  
-  @media (max-width: 768px) {
-    .schedule-table th,
-    .schedule-table td {
-      padding: 0.5rem;
-      font-size: 0.9rem;
-    }
-  }
+}

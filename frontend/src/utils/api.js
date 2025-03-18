@@ -73,10 +73,27 @@ export const getRehearsals = () => {
   return request('rehearsals');
 };
 
-export const createRehearsal = (date) => {
+export const getRehearsalById = (id) => {
+  return request(`rehearsals/${id}`);
+};
+
+export const createRehearsal = (rehearsalData) => {
   return request('rehearsals', {
     method: 'POST',
-    body: JSON.stringify({ date })
+    body: JSON.stringify(rehearsalData)
+  });
+};
+
+export const updateRehearsal = (id, data) => {
+  return request(`rehearsals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+};
+
+export const deleteRehearsal = (id, deleteAllRecurring = false) => {
+  return request(`rehearsals/${id}?delete_all_recurring=${deleteAllRecurring}`, {
+    method: 'DELETE'
   });
 };
 

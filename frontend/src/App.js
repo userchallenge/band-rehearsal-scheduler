@@ -34,23 +34,6 @@ function App() {
     
     // Check immediately
     checkAuth();
-
-
-  // useEffect(() => {
-  //   // This effect runs when the component mounts
-  //   const checkAuth = () => {
-  //     try {
-  //       const token = getToken();
-  //       console.log("Checking auth:", token ? "Token found" : "No token");
-  //       setIsAuthenticated(!!token);
-  //     } catch (err) {
-  //       console.error("Error checking auth:", err);
-  //       setIsAuthenticated(false);
-  //     }
-  //   };
-    
-  //   // Check immediately
-  //   checkAuth();
     
     // If authenticated, try to manage rehearsals automatically
     const autoManageRehearsals = async () => {

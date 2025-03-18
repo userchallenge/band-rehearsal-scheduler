@@ -4,7 +4,7 @@ import { UserContext } from '../contexts/UserContext';
 import { getUsers, createUser, getRehearsals, deleteUser } from '../utils/api';
 import AddRehearsalForm from '../components/AddRehearsalForm';
 import UserEditForm from '../components/UserEditForm';
-
+import RehearsalForm from '../components/RehearsalForm';
 import './AdminPanel.css';
 
 const AdminPanel = () => {
@@ -38,7 +38,7 @@ const AdminPanel = () => {
       window.location.href = '/';
       return;
     }
-    
+  // NEXT Få till senaste dashboard från Claude-chatten.
     fetchData();
   }, [user]);
   

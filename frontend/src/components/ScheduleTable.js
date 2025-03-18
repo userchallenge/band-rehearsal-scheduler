@@ -3,7 +3,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../contexts/UserContext';
 import './ScheduleTable.css';
 
-const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
+const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsal, onDeleteRehearsal }) => {
   const { user } = useContext(UserContext);
   const [users, setUsers] = useState([]);
   
@@ -34,11 +34,17 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
     .sort((a, b) => new Date(a.date) - new Date(b.date))
     .slice(0, 10);
   
-  // Format date to display only day and month
+  // Format date to display day and month
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     // Format as "dd MMM" (e.g., "12 Mar")
     return date.toLocaleDateString('sv-SE', { day: '2-digit', month: 'short' });
+  };
+  
+  // Format time period
+  const formatTime = (startTime, endTime) => {
+    if (!startTime || !endTime) return '';
+    return `${startTime} - ${endTime}`;
   };
   
   // Get user's response for a specific rehearsal
@@ -65,7 +71,30 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange }) => {
             <th className="name-header">Namn</th>
             {upcomingRehearsals.map(rehearsal => (
               <th key={rehearsal.id} className="date-header">
-                {formatDate(rehearsal.date)}
+                <div className="date-header-content">
+                  <div>{formatDate(rehearsal.date)}</div>
+                  <div className="rehearsal-time">{formatTime(rehearsal.start_time, rehearsal.end_time)}</div>
+                  {rehearsal.title && <div className="rehearsal-title">{rehearsal.title}</div>}
+                  
+                  {user && user.isAdmin && (
+                    <div className="rehearsal-actions">
+                      <button 
+                        className="edit-button" 
+                        onClick={() => onEditRehearsal(rehearsal.id)}
+                        title="Edit rehearsal"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        className="delete-button" 
+                        onClick={() => onDeleteRehearsal(rehearsal.id, !!rehearsal.recurring_id)}
+                        title="Delete rehearsal"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               </th>
             ))}
           </tr>

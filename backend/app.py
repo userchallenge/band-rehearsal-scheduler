@@ -1,13 +1,15 @@
 # app.py
-from flask import Flask, request, jsonify, session
-from flask_cors import CORS
-from flask_jwt_extended import JWTManager, create_access_token
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
 import os
+import uuid
+from datetime import datetime, time, timedelta
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from email_service import send_rehearsal_summary
-from models import db, User, Rehearsal, Response, LogEntry
+from flask import Flask, jsonify, request, session
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager, create_access_token
+from models import LogEntry, Rehearsal, Response, User, db
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -515,7 +517,315 @@ def delete_user(user_id):
     db.session.commit()
     
     return jsonify({"msg": "User deleted successfully"}), 200
+@app.route('/api/rehearsals', methods=['GET'])
+def get_rehearsals():
+    # Get the token from the header
+    auth_header = request.headers.get('Authorization', '')
+    
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"msg": "Missing or invalid Authorization header"}), 401
+    
+    try:
+        # Get rehearsals data
+        rehearsals = Rehearsal.query.order_by(Rehearsal.date).all()
+        result = []
+        
+        for rehearsal in rehearsals:
+            result.append({
+                'id': rehearsal.id,
+                'date': rehearsal.date.strftime('%Y-%m-%d'),
+                'start_time': rehearsal.start_time.strftime('%H:%M') if rehearsal.start_time else None,
+                'end_time': rehearsal.end_time.strftime('%H:%M') if rehearsal.end_time else None,
+                'title': rehearsal.title,
+                'recurring_id': rehearsal.recurring_id,
+                'responses': len(rehearsal.responses)
+            })
+        
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"msg": f"Error: {str(e)}"}), 500
 
+@app.route('/api/rehearsals/<int:rehearsal_id>', methods=['GET'])
+def get_rehearsal(rehearsal_id):
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    rehearsal = Rehearsal.query.get_or_404(rehearsal_id)
+    
+    return jsonify({
+        'id': rehearsal.id,
+        'date': rehearsal.date.strftime('%Y-%m-%d'),
+        'start_time': rehearsal.start_time.strftime('%H:%M') if rehearsal.start_time else None,
+        'end_time': rehearsal.end_time.strftime('%H:%M') if rehearsal.end_time else None,
+        'title': rehearsal.title,
+        'recurring_id': rehearsal.recurring_id,
+        'responses': len(rehearsal.responses)
+    }), 200
+
+@app.route('/api/rehearsals', methods=['POST'])
+def create_rehearsal():
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    data = request.get_json()
+    date_str = data.get('date')
+    start_time_str = data.get('start_time', '19:00')  # Default to 7:00 PM
+    end_time_str = data.get('end_time', '20:00')      # Default to 8:00 PM
+    title = data.get('title', '')
+    is_recurring = data.get('is_recurring', False)
+    recurrence_type = data.get('recurrence_type', 'weekly')
+    duration_months = data.get('duration_months', 3)
+    day_of_week = data.get('day_of_week')
+    
+    try:
+        date = datetime.strptime(date_str, '%Y-%m-%d')
+        start_time = datetime.strptime(start_time_str, '%H:%M').time()
+        end_time = datetime.strptime(end_time_str, '%H:%M').time()
+    except ValueError:
+        return jsonify({"msg": "Invalid date or time format. Use YYYY-MM-DD for date and HH:MM for times"}), 400
+    
+    # Generate a recurring_id for recurring events
+    recurring_id = str(uuid.uuid4()) if is_recurring else None
+    
+    # Create the rehearsals
+    created_rehearsals = []
+    
+    if is_recurring:
+        # Get the target day of the week if specified
+        if day_of_week:
+            # Map day names to numbers (0 = Monday, 6 = Sunday in Python's datetime)
+            day_map = {
+                'monday': 0, 'tuesday': 1, 'wednesday': 2, 
+                'thursday': 3, 'friday': 4, 'saturday': 5, 'sunday': 6
+            }
+            target_day = day_map.get(day_of_week.lower())
+            
+            # Adjust the date to the next occurrence of the target day
+            if target_day is not None:
+                days_ahead = (target_day - date.weekday()) % 7
+                if days_ahead > 0:
+                    date += timedelta(days=days_ahead)
+        
+        # Calculate the end date (3 months from start by default)
+        end_date = date.replace(month=date.month + duration_months) if date.month + duration_months <= 12 else \
+                   date.replace(year=date.year + 1, month=(date.month + duration_months) % 12 or 12)
+        
+        # Create recurring rehearsals
+        current_date = date
+        while current_date <= end_date:
+            # Check for existing rehearsal on this date
+            existing = Rehearsal.query.filter(
+                db.func.date(Rehearsal.date) == current_date.date()
+            ).first()
+            
+            if not existing:
+                new_rehearsal = Rehearsal(
+                    date=current_date,
+                    start_time=start_time,
+                    end_time=end_time,
+                    title=title,
+                    recurring_id=recurring_id
+                )
+                db.session.add(new_rehearsal)
+                
+                # Create default "Ja" responses for all users
+                users = User.query.all()
+                for user in users:
+                    response = Response(user=user, rehearsal=new_rehearsal, attending=True)
+                    db.session.add(response)
+                
+                created_rehearsals.append({
+                    'date': current_date.strftime('%Y-%m-%d'),
+                    'start_time': start_time.strftime('%H:%M'),
+                    'end_time': end_time.strftime('%H:%M')
+                })
+            
+            # Move to the next occurrence
+            if recurrence_type == 'weekly':
+                current_date += timedelta(days=7)
+            elif recurrence_type == 'biweekly':
+                current_date += timedelta(days=14)
+    else:
+        # Check for existing rehearsal on this date
+        existing = Rehearsal.query.filter(
+            db.func.date(Rehearsal.date) == date.date()
+        ).first()
+        
+        if existing:
+            return jsonify({"msg": f"A rehearsal already exists on {date_str}"}), 400
+        
+        new_rehearsal = Rehearsal(
+            date=date,
+            start_time=start_time,
+            end_time=end_time,
+            title=title,
+            recurring_id=None
+        )
+        db.session.add(new_rehearsal)
+        
+        # Create default "Ja" responses for all users
+        users = User.query.all()
+        for user in users:
+            response = Response(user=user, rehearsal=new_rehearsal, attending=True)
+            db.session.add(response)
+        
+        created_rehearsals.append({
+            'date': date.strftime('%Y-%m-%d'),
+            'start_time': start_time.strftime('%H:%M'),
+            'end_time': end_time.strftime('%H:%M')
+        })
+    
+    db.session.commit()
+    
+    # Log the creation
+    log = LogEntry(
+        user_id=current_user.id,
+        action="create",
+        entity_type="rehearsal",
+        entity_id=new_rehearsal.id,
+        new_value=f"Date: {date_str}, Time: {start_time_str}-{end_time_str}, Title: {title}"
+    )
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({
+        'created_rehearsals': created_rehearsals,
+        'recurring_id': recurring_id
+    }), 201
+
+@app.route('/api/rehearsals/<int:rehearsal_id>', methods=['PUT'])
+def update_rehearsal(rehearsal_id):
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    rehearsal = Rehearsal.query.get_or_404(rehearsal_id)
+    data = request.get_json()
+    
+    # Check if this is a recurring rehearsal
+    is_recurring_update = data.get('update_all_recurring', False) and rehearsal.recurring_id
+    
+    # Extract data from request
+    date_str = data.get('date')
+    start_time_str = data.get('start_time')
+    end_time_str = data.get('end_time')
+    title = data.get('title')
+    
+    # Parse date and times if provided
+    date = datetime.strptime(date_str, '%Y-%m-%d') if date_str else None
+    start_time = datetime.strptime(start_time_str, '%H:%M').time() if start_time_str else None
+    end_time = datetime.strptime(end_time_str, '%H:%M').time() if end_time_str else None
+    
+    # For recurring updates, get all related rehearsals
+    rehearsals_to_update = []
+    if is_recurring_update:
+        rehearsals_to_update = Rehearsal.query.filter_by(recurring_id=rehearsal.recurring_id).all()
+    else:
+        rehearsals_to_update = [rehearsal]
+    
+    # Update all selected rehearsals
+    for r in rehearsals_to_update:
+        if date:
+            # For recurring events, maintain the same day of week but update to new date pattern
+            if is_recurring_update and len(rehearsals_to_update) > 1:
+                # Calculate days difference between original and new date
+                days_diff = (date - rehearsal.date).days
+                r.date = r.date + timedelta(days=days_diff)
+            else:
+                r.date = date
+                
+        if start_time:
+            r.start_time = start_time
+        
+        if end_time:
+            r.end_time = end_time
+            
+        if title is not None:  # Allow empty title
+            r.title = title
+    
+    db.session.commit()
+    
+    return jsonify({
+        'updated_rehearsals': len(rehearsals_to_update),
+        'recurring_id': rehearsal.recurring_id
+    }), 200
+
+@app.route('/api/rehearsals/<int:rehearsal_id>', methods=['DELETE'])
+def delete_rehearsal(rehearsal_id):
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    rehearsal = Rehearsal.query.get_or_404(rehearsal_id)
+    
+    # Check if this is a recurring rehearsal
+    delete_all_recurring = request.args.get('delete_all_recurring', 'false').lower() == 'true'
+    
+    # For recurring deletions, get all related rehearsals
+    rehearsals_to_delete = []
+    if delete_all_recurring and rehearsal.recurring_id:
+        rehearsals_to_delete = Rehearsal.query.filter_by(recurring_id=rehearsal.recurring_id).all()
+    else:
+        rehearsals_to_delete = [rehearsal]
+    
+    # Delete responses for all rehearsals
+    for r in rehearsals_to_delete:
+        # Responses will be automatically deleted due to cascade
+        db.session.delete(r)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'deleted_rehearsals': len(rehearsals_to_delete),
+        'recurring_id': rehearsal.recurring_id if rehearsal.recurring_id else None
+    }), 200
+
+@app.route('/api/rehearsals/manage', methods=['POST'])
+def manage_rehearsals():
+    """
+    Handles the functionality to remove past rehearsals and add new ones
+    """
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    # Remove past rehearsals
+    today = datetime.now().date()
+    past_rehearsals = Rehearsal.query.filter(db.func.date(Rehearsal.date) < today).all()
+    for rehearsal in past_rehearsals:
+        db.session.delete(rehearsal)
+    
+    # Find the latest rehearsal date
+    latest_rehearsal = Rehearsal.query.order_by(Rehearsal.date.desc()).first()
+    
+    if latest_rehearsal:
+        # Add a new rehearsal one week after the latest
+        new_date = latest_rehearsal.date + timedelta(days=7)
+        new_rehearsal = Rehearsal(
+            date=new_date,
+            start_time=latest_rehearsal.start_time,  # Use the same time as the latest rehearsal
+            end_time=latest_rehearsal.end_time,
+            title=latest_rehearsal.title,
+            recurring_id=None  # Not part of a recurring series
+        )
+        db.session.add(new_rehearsal)
+        
+        # Create default "Ja" responses for all users
+        users = User.query.all()
+        for user in users:
+            response = Response(user=user, rehearsal=new_rehearsal, attending=True)
+            db.session.add(response)
+    
+    db.session.commit()
+    
+    return jsonify({"msg": "Rehearsals updated successfully"}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)

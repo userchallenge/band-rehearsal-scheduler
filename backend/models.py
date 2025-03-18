@@ -1,3 +1,4 @@
+# models.py
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
@@ -34,13 +35,18 @@ class Rehearsal(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.DateTime, nullable=False)
+    start_time = db.Column(db.Time, nullable=True)  # Start time
+    end_time = db.Column(db.Time, nullable=True)    # End time
+    title = db.Column(db.String(100), nullable=True)  # Optional title
+    recurring_id = db.Column(db.String(36), nullable=True)  # UUID to group recurring events
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationship with Responses
     responses = db.relationship('Response', back_populates='rehearsal', cascade='all, delete-orphan')
     
     def __repr__(self):
-        return f'<Rehearsal {self.date.strftime("%Y-%m-%d")}>'
+        time_str = f" {self.start_time.strftime('%H:%M')}" if self.start_time else ""
+        return f'<Rehearsal {self.date.strftime("%Y-%m-%d")}{time_str}>'
 
 
 class Response(db.Model):
@@ -84,22 +90,3 @@ class LogEntry(db.Model):
     
     def __repr__(self):
         return f'<LogEntry {self.user.username} - {self.action} - {self.timestamp}>'
-    
-# Update the Rehearsal model in models.py
-
-class Rehearsal(db.Model):
-    __tablename__ = 'rehearsals'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.DateTime, nullable=False)
-    start_time = db.Column(db.Time, nullable=False)  # Start time
-    end_time = db.Column(db.Time, nullable=False)    # End time
-    title = db.Column(db.String(100), nullable=True)  # Optional title
-    recurring_id = db.Column(db.String(36), nullable=True)  # UUID to group recurring events
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship with Responses
-    responses = db.relationship('Response', back_populates='rehearsal', cascade='all, delete-orphan')
-    
-    def __repr__(self):
-        return f'<Rehearsal {self.date.strftime("%Y-%m-%d")} {self.start_time.strftime("%H:%M")}>'

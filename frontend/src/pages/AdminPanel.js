@@ -38,7 +38,7 @@ const AdminPanel = () => {
       window.location.href = '/';
       return;
     }
-  // NEXT Få till senaste dashboard från Claude-chatten.
+
     fetchData();
   }, [user]);
   

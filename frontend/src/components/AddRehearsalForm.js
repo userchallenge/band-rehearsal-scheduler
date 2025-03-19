@@ -9,66 +9,12 @@ const AddRehearsalForm = ({ onSuccess }) => {
   const [recurrenceType, setRecurrenceType] = useState('weekly');
   const [duration, setDuration] = useState(3);
   const [dayOfWeek, setDayOfWeek] = useState('tuesday'); // Default to Tuesday rehearsals
+  const [startTime, setStartTime] = useState('19:00');
+  const [endTime, setEndTime] = useState('20:00');
+  const [title, setTitle] = useState('Band Rehearsal');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  
-  // Helper to get the next day of week from a start date
-  const getNextDayOfWeek = (startDate, dayOfWeek) => {
-    const dayMapping = {
-      'monday': 1, 'tuesday': 2, 'wednesday': 3, 
-      'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0
-    };
-    
-    const date = new Date(startDate);
-    const targetDay = dayMapping[dayOfWeek];
-    const currentDay = date.getDay();
-    
-    // Calculate days to add
-    const daysToAdd = (targetDay + 7 - currentDay) % 7;
-    
-    // If daysToAdd is 0, that means we're already on the correct day,
-    // so we'll use the start date as is
-    if (daysToAdd > 0) {
-      date.setDate(date.getDate() + daysToAdd);
-    }
-    
-    return date;
-  };
-  
-  const generateDates = () => {
-    if (!startDate) return [];
-    
-    const dates = [];
-    const start = new Date(startDate);
-    
-    // If recurring, generate multiple dates
-    if (isRecurring) {
-      // Find the first occurrence of the selected day of week on or after the start date
-      let currentDate = getNextDayOfWeek(start, dayOfWeek);
-      
-      // Calculate end date based on duration (in months)
-      const endDate = new Date(start);
-      endDate.setMonth(endDate.getMonth() + duration);
-      
-      // Generate dates until end date
-      while (currentDate <= endDate) {
-        dates.push(new Date(currentDate));
-        
-        // Move to the next occurrence based on recurrence type
-        if (recurrenceType === 'weekly') {
-          currentDate.setDate(currentDate.getDate() + 7);
-        } else if (recurrenceType === 'biweekly') {
-          currentDate.setDate(currentDate.getDate() + 14);
-        }
-      }
-    } else {
-      // Single date
-      dates.push(start);
-    }
-    
-    return dates;
-  };
   
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -76,22 +22,32 @@ const AddRehearsalForm = ({ onSuccess }) => {
     setSuccess(null);
     setLoading(true);
     
-    const dates = generateDates();
-    
-    if (dates.length === 0) {
-      setError('Please select a valid start date');
-      setLoading(false);
-      return;
-    }
-    
     try {
-      // Process each date in sequence
-      for (const date of dates) {
-        const formattedDate = date.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-        await createRehearsal(formattedDate);
+      if (!startDate) {
+        throw new Error('Please select a valid start date');
       }
       
-      setSuccess(`Successfully created ${dates.length} rehearsal${dates.length > 1 ? 's' : ''}`);
+      // Create properly formatted data object
+      const rehearsalData = {
+        date: startDate,
+        start_time: startTime,
+        end_time: endTime,
+        title: title,
+        is_recurring: isRecurring,
+        recurrence_type: recurrenceType,
+        duration_months: parseInt(duration),
+        day_of_week: dayOfWeek
+      };
+      
+      console.log('Sending rehearsal data:', rehearsalData);
+      
+      // Send the data to create the rehearsal
+      const result = await createRehearsal(rehearsalData);
+      
+      console.log('Create rehearsal result:', result);
+      
+      // Reset form and show success message
+      setSuccess(`Successfully created rehearsal(s)`);
       setStartDate('');
       if (onSuccess) onSuccess();
     } catch (err) {
@@ -119,6 +75,41 @@ const AddRehearsalForm = ({ onSuccess }) => {
             onChange={(e) => setStartDate(e.target.value)}
             required
           />
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="title">Title (Optional)</label>
+          <input
+            id="title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g., Band Rehearsal"
+          />
+        </div>
+        
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="start-time">Start Time</label>
+            <input
+              id="start-time"
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              required
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="end-time">End Time</label>
+            <input
+              id="end-time"
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              required
+            />
+          </div>
         </div>
         
         <div className="form-checkbox">

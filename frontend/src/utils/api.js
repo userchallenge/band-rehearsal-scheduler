@@ -78,9 +78,20 @@ export const getRehearsalById = (id) => {
 };
 
 export const createRehearsal = (rehearsalData) => {
+  console.log('API createRehearsal called with data:', rehearsalData);
+  
+  // Make sure we're passing a proper object
+  if (!rehearsalData || typeof rehearsalData !== 'object') {
+    console.error('Invalid rehearsal data type:', typeof rehearsalData);
+    throw new Error('Invalid rehearsal data format');
+  }
+  
   return request('rehearsals', {
     method: 'POST',
-    body: JSON.stringify(rehearsalData)
+    body: JSON.stringify(rehearsalData),
+    headers: {
+      'Content-Type': 'application/json'
+    }
   });
 };
 

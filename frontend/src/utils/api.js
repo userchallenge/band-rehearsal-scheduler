@@ -210,10 +210,14 @@ export const getUserProfile = () => {
   return request('users/profile');
 };
 
-// Make sure your ScheduleTable component has the proper props in the Dashboard.js file:
-// <ScheduleTable
-//   rehearsals={rehearsals}
-//   responses={responses}
-//   onResponseChange={handleResponseChange}
-//   currentUser={user}  // Pass the current user explicitly
-// />
+// Create a new response for a user
+export const createResponse = async (userId, rehearsalId, attending = true) => {
+  return request('responses', {
+    method: 'POST',
+    body: JSON.stringify({
+      user_id: userId,
+      rehearsal_id: rehearsalId,
+      attending: attending
+    })
+  });
+};

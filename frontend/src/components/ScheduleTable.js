@@ -59,7 +59,8 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsa
   // Handle clicking on a response cell
   const handleCellClick = (response) => {
     // Don't do anything if no response or user doesn't match
-    if (!response || !activeUser) return;
+    if (!response || user.id !== response.user_id) return;
+
     
     // Only allow users to update their own responses, or admins to update any response
     if (activeUser.id === response.user_id || activeUser.isAdmin) {

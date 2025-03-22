@@ -1,55 +1,37 @@
-// src/pages/Dashboard.js - Updated with better user data loading
+// src/pages/Dashboard.js
 import React, { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
-import { getRehearsals, getResponses, updateResponse, getUserById } from '../utils/api';
+import { getRehearsals, getResponses, updateResponse, getUserById, createResponse } from '../utils/api';
 import ScheduleTable from '../components/ScheduleTable';
 import './Dashboard.css';
 
 const Dashboard = () => {
   const { user, setUser } = useContext(UserContext);
+  const [userDetails, setUserDetails] = useState(null);
   const [rehearsals, setRehearsals] = useState([]);
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [userDetails, setUserDetails] = useState(null);
   
+  // Fetch complete user data if needed
   useEffect(() => {
-    console.log("Dashboard mounted with user data:", user);
-    
-    const loadUserData = async () => {
-      if (!user || !user.id) return;
-      
-      try {
-        // Load complete user profile data
-        const userData = await getUserById(user.id);
-        console.log("Loaded user details:", userData);
-        
-        // Update user context with more complete data
-        setUser(prevUser => ({
-          ...prevUser,
-          username: userData.username,
-          email: userData.email,
-          first_name: userData.first_name,
-          last_name: userData.last_name
-        }));
-        
-        // Store locally for components that need it
-        setUserDetails(userData);
-        
-        // Also update localStorage for page refreshes
-        const storedUserInfo = JSON.parse(localStorage.getItem('user_info') || '{}');
-        localStorage.setItem('user_info', JSON.stringify({
-          ...storedUserInfo,
-          username: userData.username,
-          first_name: userData.first_name,
-          last_name: userData.last_name
-        }));
-      } catch (err) {
-        console.error("Error fetching user details:", err);
-        // Non-critical error, don't set error state
+    const fetchUserDetails = async () => {
+      if (user && user.id && !userDetails) {
+        try {
+          const userData = await getUserById(user.id);
+          setUserDetails(userData);
+        } catch (err) {
+          console.error("Error fetching user details:", err);
+        }
       }
     };
+    
+    fetchUserDetails();
+  }, [user, userDetails]);
+  
+  useEffect(() => {
+    console.log("Dashboard user data:", user);
     
     const fetchData = async () => {
       // Only fetch data if user is logged in
@@ -57,25 +39,51 @@ const Dashboard = () => {
       
       try {
         setLoading(true);
-        const [rehearsalsData, responsesData] = await Promise.all([
-          getRehearsals(),
-          getResponses()
-        ]);
+        const rehearsalsData = await getRehearsals();
+        const responsesData = await getResponses();
         
         setRehearsals(rehearsalsData);
         setResponses(responsesData);
-        setError(null);
+        
+        // Check if this user has responses for all rehearsals
+        const userResponses = responsesData.filter(r => String(r.user_id) === String(user.id));
+        const missingRehearsals = [];
+        
+        rehearsalsData.forEach(rehearsal => {
+          const hasResponse = userResponses.some(r => r.rehearsal_id === rehearsal.id);
+          if (!hasResponse) {
+            missingRehearsals.push(rehearsal.id);
+          }
+        });
+        
+        // Create responses for any missing rehearsals
+        if (missingRehearsals.length > 0) {
+          console.log("User is missing responses for rehearsals:", missingRehearsals);
+          
+          // Create responses for each missing rehearsal
+          for (const rehearsalId of missingRehearsals) {
+            try {
+              const newResponse = await createResponse(user.id, rehearsalId, true);
+              responsesData.push(newResponse);
+            } catch (err) {
+              console.error(`Failed to create response for rehearsal ${rehearsalId}:`, err);
+            }
+          }
+          
+          // Update the responses state with the new responses
+          setResponses([...responsesData]);
+        }
+        
+        setLoading(false);
       } catch (err) {
         console.error("Error fetching data:", err);
         setError('Failed to load data. Please try again later.');
-      } finally {
         setLoading(false);
       }
     };
     
-    // Load user data first, then fetch rehearsals and responses
-    loadUserData().then(fetchData);
-  }, [user, setUser]); // Only re-run if user object changes
+    fetchData();
+  }, [user]);
   
   const handleResponseChange = async (responseId, attending) => {
     try {
@@ -95,34 +103,26 @@ const Dashboard = () => {
     }
   };
   
-  // Display a welcome message with user's name if available
-  const renderWelcomeMessage = () => {
-    if (!user) return null;
-    
-    const firstName = user.first_name || userDetails?.first_name || '';
-    const lastName = user.last_name || userDetails?.last_name || '';
-    const displayName = firstName 
-      ? `${firstName} ${lastName}`.trim()
-      : user.username || userDetails?.username || 'Band Member';
-    
-    return (
-      <div className="welcome-message">
-        <h2>Welcome, {displayName}!</h2>
-        <p>Here's your band rehearsal schedule. Mark your availability by clicking on your responses in the table.</p>
-      </div>
-    );
-  };
-  
   // Show loading if we're still loading data or if user data isn't available yet
   if (loading || !user) {
     return <div className="dashboard loading">Loading...</div>;
   }
   
+  // Get user's display name
+  const getUserDisplayName = () => {
+    if (userDetails && (userDetails.first_name || userDetails.last_name)) {
+      return `${userDetails.first_name || ''} ${userDetails.last_name || ''}`.trim();
+    }
+    return user?.username || 'bandmedlem';
+  };
+  
   return (
     <div className="dashboard">
       <h1>Band Rehearsal Schedule</h1>
       
-      {renderWelcomeMessage()}
+      <div className="welcome-message">
+        <p>Welcome, {getUserDisplayName()}! Here's the upcoming rehearsal schedule.</p>
+      </div>
       
       {error && <div className="error-message">{error}</div>}
       
@@ -134,7 +134,6 @@ const Dashboard = () => {
               rehearsals={rehearsals}
               responses={responses}
               onResponseChange={handleResponseChange}
-              currentUser={user}
             />
           ) : (
             <p>No upcoming rehearsals scheduled.</p>

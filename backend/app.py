@@ -1110,5 +1110,80 @@ def handle_exception(e):
     # Return a generic error response
     return jsonify({"msg": "An unexpected error occurred"}), 500
 
+# Add this route to your app.py file
+
+@app.route('/api/responses', methods=['POST'])
+def create_response():
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    data = request.get_json()
+    user_id = data.get('user_id')
+    rehearsal_id = data.get('rehearsal_id')
+    attending = data.get('attending', True)
+    
+    # Check if the user exists
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+    
+    # Check if the rehearsal exists
+    rehearsal = Rehearsal.query.get(rehearsal_id)
+    if not rehearsal:
+        return jsonify({"msg": "Rehearsal not found"}), 404
+    
+    # Check if a response already exists
+    existing_response = Response.query.filter_by(
+        user_id=user_id, 
+        rehearsal_id=rehearsal_id
+    ).first()
+    
+    if existing_response:
+        return jsonify({
+            "msg": "Response already exists",
+            "id": existing_response.id,
+            "user_id": existing_response.user_id,
+            "username": existing_response.user.username,
+            "rehearsal_id": existing_response.rehearsal_id,
+            "rehearsal_date": existing_response.rehearsal.date.strftime('%Y-%m-%d'),
+            "attending": existing_response.attending,
+            "comment": existing_response.comment,
+            "updated_at": existing_response.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        }), 200
+    
+    # Create a new response
+    new_response = Response(
+        user_id=user_id,
+        rehearsal_id=rehearsal_id,
+        attending=attending
+    )
+    
+    db.session.add(new_response)
+    db.session.commit()
+    
+    # Log the creation
+    log = LogEntry(
+        user_id=current_user.id,
+        action="create",
+        entity_type="response",
+        entity_id=new_response.id,
+        new_value=f"Attending: {'Ja' if attending else 'Nej'}"
+    )
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({
+        "id": new_response.id,
+        "user_id": new_response.user_id,
+        "username": new_response.user.username,
+        "rehearsal_id": new_response.rehearsal_id,
+        "rehearsal_date": new_response.rehearsal.date.strftime('%Y-%m-%d'),
+        "attending": new_response.attending,
+        "comment": new_response.comment,
+        "updated_at": new_response.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+    }), 201
+
 if __name__ == '__main__':
     app.run(debug=True)

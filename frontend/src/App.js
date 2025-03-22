@@ -1,10 +1,11 @@
-// src/App.js
+// src/App.js - Complete version with invitation routes
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { UserProvider } from './contexts/UserContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AdminPanel from './pages/AdminPanel';
+import RegisterWithInvitation from './pages/RegisterWithInvitation';
 import Navbar from './components/Navbar';
 import { getToken } from './utils/auth';
 import { manageRehearsals } from './utils/api';
@@ -22,8 +23,10 @@ function App() {
         const authenticated = !!token;
         setIsAuthenticated(authenticated);
         
-        // If not authenticated, ensure we're on the login page
-        if (!authenticated && window.location.pathname !== '/login') {
+        // If not authenticated, ensure we're on the login page or register page
+        if (!authenticated && 
+            window.location.pathname !== '/login' && 
+            !window.location.pathname.startsWith('/register/')) {
           window.location.href = '/login';
         }
       } catch (err) {
@@ -87,6 +90,7 @@ function App() {
           <main className="main-content">
             <Routes>
               <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+              <Route path="/register/:token" element={<RegisterWithInvitation />} />
               <Route path="/" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} />
               <Route path="/admin" element={isAuthenticated ? <AdminPanel /> : <Navigate to="/login" />} />
               <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />

@@ -51,3 +51,30 @@ export const loginUser = async (username, password) => {
 
   return response.json();
 };
+
+export const registerWithInvitation = async (token, userData) => {
+  const BASE_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:5000/api';
+  const registerUrl = `${BASE_URL.replace(/\/api$/, '')}/api/register/${token}`;
+  
+    // Log the URL to verify it's correct
+    console.log('Registration URL:', registerUrl);
+    console.log('Sending registration request to:', registerUrl);
+  
+  const response = await fetch(registerUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    credentials: 'include',
+    body: JSON.stringify(userData)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error('Registration failed:', errorData);
+    throw new Error(errorData.msg || 'Registration failed');
+  }
+
+  return response.json();
+};

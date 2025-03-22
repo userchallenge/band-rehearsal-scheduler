@@ -1,20 +1,28 @@
 # app.py
+import logging
 import os
 import uuid
 from datetime import datetime, time, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from email_service import send_email, event_header, event_no_decline, event_decline, event_footer
+from dotenv import load_dotenv
+from email_service import (event_decline, event_footer, event_header,
+                           event_no_decline, send_email)
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token
-from models import LogEntry, Rehearsal, Response, User, db
+# Add this import at the top of app.py
+from invitation_email import send_invitation_email
+from models import db, User, Rehearsal, Response, LogEntry, Invitation
 from werkzeug.security import check_password_hash, generate_password_hash
-import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Load environment variables before initializing the app
+load_dotenv()  # This should be at the beginning of app.py
+
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -647,7 +655,7 @@ def update_response(response_id):
         
         # Only allow users to update their own responses, unless they're an admin
         if response.user_id != current_user.id and not current_user.is_admin:
-            return jsonify({"msg": "You can only update your own responses"}), 403
+            return jsonify({"msg": "You can only update your own responses"}), 403  
         
         data = request.get_json()
         old_attending = "Ja" if response.attending else "Nej"
@@ -885,6 +893,196 @@ def create_rehearsals_bulk():
         logger.error(f"Error creating bulk rehearsals: {str(e)}")
         db.session.rollback()
         return jsonify({"msg": "Failed to create rehearsals"}), 500
+
+# Invitation routes
+# @app.route('/api/invitations', methods=['POST'])
+# def create_invitation():
+#     current_user = get_user_from_token()
+    
+#     if not current_user or not current_user.is_admin:
+#         return jsonify({"msg": "Admin privileges required"}), 403
+    
+#     data = request.get_json()
+#     email = data.get('email')
+    
+#     if not email:
+#         return jsonify({"msg": "Email is required"}), 400
+    
+#     # Check if user with this email already exists
+#     existing_user = User.query.filter_by(email=email).first()
+#     if existing_user:
+#         return jsonify({"msg": "User with this email already exists"}), 400
+    
+#     # Check if invitation for this email already exists
+#     existing_invitation = Invitation.query.filter_by(email=email, is_accepted=False).filter(
+#         Invitation.expires_at > datetime.utcnow()
+#     ).first()
+    
+#     if existing_invitation:
+#         return jsonify({"msg": "An active invitation for this email already exists"}), 400
+    
+#     # Create new invitation
+#     invitation = Invitation(email=email, created_by=current_user.id)
+#     db.session.add(invitation)
+#     db.session.commit()
+    
+#     # Logic to send invitation email would go here
+#     # For now, we'll just return the token that would be in the email
+    
+#     return jsonify({
+#         'id': invitation.id,
+#         'email': invitation.email,
+#         'token': invitation.token,
+#         'expires_at': invitation.expires_at.isoformat()
+#     }), 201
+
+@app.route('/api/invitations', methods=['GET'])
+def get_invitations():
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    invitations = Invitation.query.filter_by(is_accepted=False).order_by(Invitation.created_at.desc()).all()
+    result = []
+    
+    for invitation in invitations:
+        result.append({
+            'id': invitation.id,
+            'email': invitation.email,
+            'created_at': invitation.created_at.isoformat(),
+            'expires_at': invitation.expires_at.isoformat(),
+            'is_expired': invitation.is_expired
+        })
+    
+    return jsonify(result), 200
+
+@app.route('/api/invitations/<int:invitation_id>', methods=['DELETE'])
+def delete_invitation(invitation_id):
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    invitation = Invitation.query.get_or_404(invitation_id)
+    
+    db.session.delete(invitation)
+    db.session.commit()
+    
+    return jsonify({"msg": "Invitation deleted successfully"}), 200
+
+
+
+
+
+@app.route('/api/register/<token>', methods=['POST'])
+def register_with_invitation(token):
+    # Add more detailed logging
+    print(f"Processing registration with token: {token}")
+    
+    # Log the incoming request data
+    data = request.get_json()
+    print(f"Registration data received: {data}")
+    
+    invitation = Invitation.query.filter_by(token=token, is_accepted=False).first()
+    
+    if not invitation:
+        print(f"Invitation not found or already accepted for token: {token}")
+        return jsonify({"msg": "Invalid or expired invitation token"}), 400
+    
+    if invitation.is_expired:
+        print(f"Invitation expired for token: {token}, expires_at: {invitation.expires_at}")
+        return jsonify({"msg": "Invitation has expired"}), 400
+    
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    first_name = data.get('first_name', '')
+    last_name = data.get('last_name', '')
+    
+    if not username or not password:
+        return jsonify({"msg": "Username and password are required"}), 400
+    
+    # Check if username already exists
+    if User.query.filter_by(username=username).first():
+        return jsonify({"msg": "Username already exists"}), 400
+    
+    # Create new user
+    new_user = User(
+        username=username,
+        email=invitation.email,
+        first_name=first_name,
+        last_name=last_name,
+        is_admin=False  # invited users are not admins by default
+    )
+    new_user.set_password(password)
+    
+    # Mark invitation as accepted
+    invitation.is_accepted = True
+    
+    db.session.add(new_user)
+    db.session.commit()
+    
+    # Create access token
+    identity_str = str(new_user.id)
+    access_token = create_access_token(identity=identity_str)
+    
+    return jsonify(access_token=access_token, user_id=new_user.id, is_admin=new_user.is_admin), 201
+
+@app.route('/api/invitations', methods=['POST'])
+def create_invitation():
+    current_user = get_user_from_token()
+    
+    if not current_user or not current_user.is_admin:
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    data = request.get_json()
+    email = data.get('email')
+    
+    if not email:
+        return jsonify({"msg": "Email is required"}), 400
+    
+    # Check if user with this email already exists
+    existing_user = User.query.filter_by(email=email).first()
+    if existing_user:
+        return jsonify({"msg": "User with this email already exists"}), 400
+    
+    # Check if invitation for this email already exists
+    existing_invitation = Invitation.query.filter_by(email=email, is_accepted=False).filter(
+        Invitation.expires_at > datetime.utcnow()
+    ).first()
+    
+    if existing_invitation:
+        return jsonify({"msg": "An active invitation for this email already exists"}), 400
+    
+    # Create new invitation
+    invitation = Invitation(email=email, created_by=current_user.id)
+    db.session.add(invitation)
+    db.session.commit()
+    
+    # # Send invitation email
+    # email_sent = send_invitation_email(email, invitation.token, app_url=request.host_url.rstrip('/'))
+    # Send invitation email
+    email_sent = send_invitation_email(email, invitation.token, app_url=os.environ.get('APP_URL', 'http://localhost:3000'))
+    
+    # Log the invitation
+    log = LogEntry(
+        user_id=current_user.id,
+        action="create",
+        entity_type="invitation",
+        entity_id=invitation.id,
+        new_value=f"Email: {email}, Token: {invitation.token}, Email Sent: {email_sent}"
+    )
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({
+        'id': invitation.id,
+        'email': invitation.email,
+        'token': invitation.token,
+        'expires_at': invitation.expires_at.isoformat(),
+        'email_sent': email_sent
+    }), 201
 
 @app.errorhandler(404)
 def not_found(error):

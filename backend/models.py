@@ -1,7 +1,9 @@
 # models.py
+import uuid
+from datetime import datetime, timedelta
+
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
 
@@ -87,6 +89,33 @@ class LogEntry(db.Model):
     
     # Relationship
     user = db.relationship('User')
+
+class Invitation(db.Model):
+    __tablename__ = 'invitations'
     
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), nullable=False)
+    token = db.Column(db.String(100), nullable=False, unique=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    is_accepted = db.Column(db.Boolean, default=False)
+    
+    # Relationship
+    creator = db.relationship('User', foreign_keys=[created_by])
+    
+    def __init__(self, email, created_by, expires_days=7):
+        self.email = email
+        self.created_by = created_by
+        self.token = str(uuid.uuid4())
+        self.expires_at = datetime.utcnow() + timedelta(days=expires_days)
+    
+    @property
+    def is_expired(self):
+        return datetime.utcnow() > self.expires_at
+    
+    def __repr__(self):
+        return f'<Invitation {self.email}>'
+        
     def __repr__(self):
         return f'<LogEntry {self.user.username} - {self.action} - {self.timestamp}>'

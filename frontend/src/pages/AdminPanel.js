@@ -1,10 +1,11 @@
-// src/pages/AdminPanel.js
+// src/pages/AdminPanel.js - Updated to include InvitationManagement
 import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../contexts/UserContext';
 import { getUsers, createUser, getRehearsals, deleteUser } from '../utils/api';
 import AddRehearsalForm from '../components/AddRehearsalForm';
 import UserEditForm from '../components/UserEditForm';
 import RehearsalForm from '../components/RehearsalForm';
+import InvitationManagement from '../components/InvitationManagement';
 import './AdminPanel.css';
 
 const AdminPanel = () => {
@@ -14,6 +15,7 @@ const AdminPanel = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [activeTab, setActiveTab] = useState('users'); // Added tab state
   
   // New user form state
   const [showNewUserForm, setShowNewUserForm] = useState(false);
@@ -38,7 +40,7 @@ const AdminPanel = () => {
       window.location.href = '/';
       return;
     }
-
+  
     fetchData();
   }, [user]);
   
@@ -159,7 +161,30 @@ const AdminPanel = () => {
       {error && <div className="error-message">{error}</div>}
       {success && <div className="success-message">{success}</div>}
       
-      <div className="admin-grid">
+      {/* Added tab navigation */}
+      <div className="admin-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('users')}
+        >
+          Users
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'rehearsals' ? 'active' : ''}`}
+          onClick={() => setActiveTab('rehearsals')}
+        >
+          Rehearsals
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'invitations' ? 'active' : ''}`}
+          onClick={() => setActiveTab('invitations')}
+        >
+          Invitations
+        </button>
+      </div>
+      
+      {/* Users Tab */}
+      {activeTab === 'users' && (
         <div className="admin-section">
           <div className="section-header">
             <h2>Users Management</h2>
@@ -305,32 +330,11 @@ const AdminPanel = () => {
               </tbody>
             </table>
           </div>
-          
-          {/* Delete Confirmation Dialog */}
-          {deleteConfirmUserId && (
-            <div className="confirm-dialog-overlay">
-              <div className="confirm-dialog">
-                <h3>Confirm Deletion</h3>
-                <p>Are you sure you want to delete this user? This action cannot be undone.</p>
-                <div className="dialog-actions">
-                  <button 
-                    className="cancel-button"
-                    onClick={handleCancelDelete}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    className="delete-button"
-                    onClick={() => handleDeleteUser(deleteConfirmUserId)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
-        
+      )}
+      
+      {/* Rehearsals Tab */}
+      {activeTab === 'rehearsals' && (
         <div className="admin-section">
           <div className="section-header">
             <h2>Rehearsal Management</h2>
@@ -357,16 +361,37 @@ const AdminPanel = () => {
               </tbody>
             </table>
           </div>
-          
-          <div className="help-section">
-            <h3>Quick Help</h3>
-            <ul>
-              <li><strong>Add Rehearsal</strong>: Create a new rehearsal date or recurring schedule.</li>
-              <li><strong>Auto Management</strong>: Past rehearsals are automatically removed and new ones added when users log in.</li>
-            </ul>
+        </div>
+      )}
+      
+      {/* Invitations Tab - New section */}
+      {activeTab === 'invitations' && (
+        <InvitationManagement />
+      )}
+      
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirmUserId && (
+        <div className="confirm-dialog-overlay">
+          <div className="confirm-dialog">
+            <h3>Confirm Deletion</h3>
+            <p>Are you sure you want to delete this user? This action cannot be undone.</p>
+            <div className="dialog-actions">
+              <button 
+                className="cancel-button"
+                onClick={handleCancelDelete}
+              >
+                Cancel
+              </button>
+              <button 
+                className="delete-button"
+                onClick={() => handleDeleteUser(deleteConfirmUserId)}
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

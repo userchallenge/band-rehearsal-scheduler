@@ -172,3 +172,48 @@ export const checkTokenStatus = () => {
   console.log('[DEBUG] Token check:', { hasToken, tokenPreview });
   return { hasToken, tokenPreview };
 };
+
+// Invitations
+export const createInvitation = (email) => {
+  return request('invitations', {
+    method: 'POST',
+    body: JSON.stringify({ email })
+  });
+};
+
+export const getInvitations = () => {
+  return request('invitations');
+};
+
+export const deleteInvitation = (invitationId) => {
+  return request(`invitations/${invitationId}`, {
+    method: 'DELETE'
+  });
+};
+
+export const registerWithInvitation = (token, userData) => {
+  return request(`register/${token}`, {
+    method: 'POST',
+    body: JSON.stringify(userData)
+  });
+};
+
+
+
+// Make sure the getUserById function is properly exported in your utils/api.js file
+// If you already have this function, make sure it's working correctly
+
+
+
+// If you need to create a new user profile function, add this:
+export const getUserProfile = () => {
+  return request('users/profile');
+};
+
+// Make sure your ScheduleTable component has the proper props in the Dashboard.js file:
+// <ScheduleTable
+//   rehearsals={rehearsals}
+//   responses={responses}
+//   onResponseChange={handleResponseChange}
+//   currentUser={user}  // Pass the current user explicitly
+// />

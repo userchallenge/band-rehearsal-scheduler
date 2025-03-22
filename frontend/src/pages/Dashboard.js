@@ -1,27 +1,55 @@
-// src/pages/Dashboard.js
+// src/pages/Dashboard.js - Updated with better user data loading
 import React, { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
-import { getRehearsals, getResponses, updateResponse, deleteRehearsal } from '../utils/api';
+import { getRehearsals, getResponses, updateResponse, getUserById } from '../utils/api';
 import ScheduleTable from '../components/ScheduleTable';
-import RehearsalForm from '../components/RehearsalForm';
 import './Dashboard.css';
 
 const Dashboard = () => {
-  const { user } = useContext(UserContext);
+  const { user, setUser } = useContext(UserContext);
   const [rehearsals, setRehearsals] = useState([]);
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  
-  // State for edit/delete functionality
-  const [editingRehearsalId, setEditingRehearsalId] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteInfo, setDeleteInfo] = useState({ id: null, isRecurring: false });
+  const [userDetails, setUserDetails] = useState(null);
   
   useEffect(() => {
-    console.log("Dashboard user data:", user);
+    console.log("Dashboard mounted with user data:", user);
+    
+    const loadUserData = async () => {
+      if (!user || !user.id) return;
+      
+      try {
+        // Load complete user profile data
+        const userData = await getUserById(user.id);
+        console.log("Loaded user details:", userData);
+        
+        // Update user context with more complete data
+        setUser(prevUser => ({
+          ...prevUser,
+          username: userData.username,
+          email: userData.email,
+          first_name: userData.first_name,
+          last_name: userData.last_name
+        }));
+        
+        // Store locally for components that need it
+        setUserDetails(userData);
+        
+        // Also update localStorage for page refreshes
+        const storedUserInfo = JSON.parse(localStorage.getItem('user_info') || '{}');
+        localStorage.setItem('user_info', JSON.stringify({
+          ...storedUserInfo,
+          username: userData.username,
+          first_name: userData.first_name,
+          last_name: userData.last_name
+        }));
+      } catch (err) {
+        console.error("Error fetching user details:", err);
+        // Non-critical error, don't set error state
+      }
+    };
     
     const fetchData = async () => {
       // Only fetch data if user is logged in
@@ -29,21 +57,25 @@ const Dashboard = () => {
       
       try {
         setLoading(true);
-        const rehearsalsData = await getRehearsals();
-        const responsesData = await getResponses();
+        const [rehearsalsData, responsesData] = await Promise.all([
+          getRehearsals(),
+          getResponses()
+        ]);
         
         setRehearsals(rehearsalsData);
         setResponses(responsesData);
-        setLoading(false);
+        setError(null);
       } catch (err) {
         console.error("Error fetching data:", err);
         setError('Failed to load data. Please try again later.');
+      } finally {
         setLoading(false);
       }
     };
     
-    fetchData();
-  }, [user]);
+    // Load user data first, then fetch rehearsals and responses
+    loadUserData().then(fetchData);
+  }, [user, setUser]); // Only re-run if user object changes
   
   const handleResponseChange = async (responseId, attending) => {
     try {
@@ -57,89 +89,28 @@ const Dashboard = () => {
             : response
         )
       );
-      
-      setSuccess('Your response has been updated');
-      setTimeout(() => setSuccess(null), 3000); // Clear success message after 3 seconds
     } catch (err) {
+      console.error("Error updating response:", err);
       setError('Failed to update your response. Please try again.');
-      setTimeout(() => setError(null), 5000); // Clear error message after 5 seconds
     }
   };
-
-  // Handle edit rehearsal
-  const handleEditRehearsal = (rehearsalId) => {
-    // Only allow admin users to edit rehearsals
-    if (!user || !user.isAdmin) {
-      setError('Only administrators can edit rehearsals');
-      return;
-    }
+  
+  // Display a welcome message with user's name if available
+  const renderWelcomeMessage = () => {
+    if (!user) return null;
     
-    setEditingRehearsalId(rehearsalId);
-  };
-
-  // Handle delete rehearsal
-  const handleDeleteRehearsal = (rehearsalId, isRecurring) => {
-    // Only allow admin users to delete rehearsals
-    if (!user || !user.isAdmin) {
-      setError('Only administrators can delete rehearsals');
-      return;
-    }
+    const firstName = user.first_name || userDetails?.first_name || '';
+    const lastName = user.last_name || userDetails?.last_name || '';
+    const displayName = firstName 
+      ? `${firstName} ${lastName}`.trim()
+      : user.username || userDetails?.username || 'Band Member';
     
-    setDeleteInfo({ id: rehearsalId, isRecurring });
-    setShowDeleteConfirm(true);
-  };
-  
-  // Handle cancel edit
-  const handleCancelEdit = () => {
-    setEditingRehearsalId(null);
-  };
-  
-  // Handle rehearsal update success
-  const handleRehearsalUpdated = () => {
-    // Refresh data after update
-    const fetchData = async () => {
-      try {
-        const rehearsalsData = await getRehearsals();
-        setRehearsals(rehearsalsData);
-        setSuccess('Rehearsal updated successfully');
-        setTimeout(() => setSuccess(null), 3000);
-      } catch (err) {
-        setError('Failed to refresh rehearsal data');
-      }
-    };
-    
-    fetchData();
-    setEditingRehearsalId(null);
-  };
-  
-  // Execute delete rehearsal
-  const executeDelete = async () => {
-    try {
-      await deleteRehearsal(deleteInfo.id, deleteInfo.isRecurring);
-      
-      // Remove the deleted rehearsal(s) from state
-      const updatedRehearsals = deleteInfo.isRecurring
-        ? rehearsals.filter(r => r.recurring_id !== rehearsals.find(r => r.id === deleteInfo.id)?.recurring_id)
-        : rehearsals.filter(r => r.id !== deleteInfo.id);
-      
-      setRehearsals(updatedRehearsals);
-      setSuccess(deleteInfo.isRecurring 
-        ? 'All recurring rehearsals deleted successfully' 
-        : 'Rehearsal deleted successfully');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError('Failed to delete rehearsal. Please try again.');
-      setTimeout(() => setError(null), 5000);
-    } finally {
-      setShowDeleteConfirm(false);
-      setDeleteInfo({ id: null, isRecurring: false });
-    }
-  };
-  
-  // Cancel delete
-  const cancelDelete = () => {
-    setShowDeleteConfirm(false);
-    setDeleteInfo({ id: null, isRecurring: false });
+    return (
+      <div className="welcome-message">
+        <h2>Welcome, {displayName}!</h2>
+        <p>Here's your band rehearsal schedule. Mark your availability by clicking on your responses in the table.</p>
+      </div>
+    );
   };
   
   // Show loading if we're still loading data or if user data isn't available yet
@@ -151,42 +122,9 @@ const Dashboard = () => {
     <div className="dashboard">
       <h1>Band Rehearsal Schedule</h1>
       
+      {renderWelcomeMessage()}
+      
       {error && <div className="error-message">{error}</div>}
-      {success && <div className="success-message">{success}</div>}
-      
-      {/* Edit Rehearsal Form */}
-      {editingRehearsalId && (
-        <div className="form-container">
-          <RehearsalForm
-            rehearsalId={editingRehearsalId}
-            onCancel={handleCancelEdit}
-            onSuccess={handleRehearsalUpdated}
-          />
-        </div>
-      )}
-      
-      {/* Delete Confirmation Dialog */}
-      {showDeleteConfirm && (
-        <div className="confirm-dialog-overlay">
-          <div className="confirm-dialog">
-            <h3>Confirm Deletion</h3>
-            <p>
-              {deleteInfo.isRecurring 
-                ? 'Are you sure you want to delete all instances of this recurring rehearsal?' 
-                : 'Are you sure you want to delete this rehearsal?'}
-            </p>
-            <p>This action cannot be undone.</p>
-            <div className="dialog-actions">
-              <button className="cancel-button" onClick={cancelDelete}>
-                Cancel
-              </button>
-              <button className="delete-button" onClick={executeDelete}>
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       
       <div className="dashboard-content">
         {/* Schedule Table */}
@@ -196,8 +134,7 @@ const Dashboard = () => {
               rehearsals={rehearsals}
               responses={responses}
               onResponseChange={handleResponseChange}
-              onEditRehearsal={handleEditRehearsal}
-              onDeleteRehearsal={handleDeleteRehearsal}
+              currentUser={user}
             />
           ) : (
             <p>No upcoming rehearsals scheduled.</p>

@@ -85,3 +85,61 @@
     padding: 1rem;
   }
 }
+
+/* Add these styles to your Dashboard.css file */
+
+.welcome-message {
+  background-color: #e3f2fd;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  border-left: 4px solid #2196f3;
+}
+
+.welcome-message h2 {
+  margin-top: 0;
+  color: #1976d2;
+  font-size: 1.5rem;
+}
+
+.welcome-message p {
+  margin-bottom: 0;
+  color: #555;
+}
+
+/* And add these styles to your ScheduleTable.css file */
+
+.tooltip {
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.comment-indicator {
+  margin-left: 0.3rem;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.current-user-cell {
+  position: relative;
+}
+
+.current-user-cell:hover::after {
+  content: "Click to update";
+  position: absolute;
+  bottom: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  z-index: 1;
+}

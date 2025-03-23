@@ -143,3 +143,12 @@
   white-space: nowrap;
   z-index: 1;
 }
+
+.success-message {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  padding: 0.75rem;
+  margin-bottom: 1.5rem;
+  border-radius: 4px;
+  border-left: 3px solid #2e7d32;
+}

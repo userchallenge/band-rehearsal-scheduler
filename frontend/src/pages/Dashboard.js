@@ -2,27 +2,96 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
-import { getRehearsals, getResponses, updateResponse, getUserById, createResponse } from '../utils/api';
+// import { getRehearsals, getResponses, updateResponse, getUserById, createResponse, deleteRehearsal } from '../utils/api';
+import { 
+  getRehearsals, 
+  getResponses, 
+  updateResponse, 
+  getUserProfile, 
+  createResponse 
+} from '../utils/api';
 import ScheduleTable from '../components/ScheduleTable';
+import EditRehearsalModal from '../components/EditRehearsalModal';
+import DeleteRehearsalModal from '../components/DeleteRehearsalModal';
 import './Dashboard.css';
 
 const Dashboard = () => {
-  const { user, setUser } = useContext(UserContext);
+  // Change this line:
+// const { user, setUser } = useContext(UserContext); TODO: Remove setUser
+  const { user } = useContext(UserContext);
   const [userDetails, setUserDetails] = useState(null);
   const [rehearsals, setRehearsals] = useState([]);
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   
-  // Fetch complete user data if needed
+  // Edit/Delete modals state
+  const [editingRehearsalId, setEditingRehearsalId] = useState(null);
+  const [deletingRehearsal, setDeletingRehearsal] = useState(null);
+
+  // Define fetchData function
+  const fetchData = async () => {
+    // Only fetch data if user is logged in
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const rehearsalsData = await getRehearsals();
+      const responsesData = await getResponses();
+      
+      setRehearsals(rehearsalsData);
+      setResponses(responsesData);
+      
+      // Check if this user has responses for all rehearsals
+      const userResponses = responsesData.filter(r => String(r.user_id) === String(user.id));
+      const missingRehearsals = [];
+      
+      rehearsalsData.forEach(rehearsal => {
+        const hasResponse = userResponses.some(r => r.rehearsal_id === rehearsal.id);
+        if (!hasResponse) {
+          missingRehearsals.push(rehearsal.id);
+        }
+      });
+      
+      // Create responses for any missing rehearsals
+      if (missingRehearsals.length > 0) {
+        console.log("User is missing responses for rehearsals:", missingRehearsals);
+        
+        // Create responses for each missing rehearsal
+        for (const rehearsalId of missingRehearsals) {
+          try {
+            const newResponse = await createResponse(user.id, rehearsalId, true);
+            responsesData.push(newResponse);
+          } catch (err) {
+            console.error(`Failed to create response for rehearsal ${rehearsalId}:`, err);
+          }
+        }
+        
+        // Update the responses state with the new responses
+        setResponses([...responsesData]);
+      }
+      
+      setLoading(false);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError('Failed to load data. Please try again later.');
+      setLoading(false);
+    }
+  };
+  
   useEffect(() => {
     const fetchUserDetails = async () => {
       if (user && user.id && !userDetails) {
         try {
-          const userData = await getUserById(user.id);
+          // Use getUserProfile instead of getUserById
+          const userData = await getUserProfile();
           setUserDetails(userData);
         } catch (err) {
           console.error("Error fetching user details:", err);
+          // This is non-critical, so we can just log the error
+          // The UI will fallback to using username
         }
       }
     };
@@ -33,57 +102,9 @@ const Dashboard = () => {
   useEffect(() => {
     console.log("Dashboard user data:", user);
     
-    const fetchData = async () => {
-      // Only fetch data if user is logged in
-      if (!user) return;
-      
-      try {
-        setLoading(true);
-        const rehearsalsData = await getRehearsals();
-        const responsesData = await getResponses();
-        
-        setRehearsals(rehearsalsData);
-        setResponses(responsesData);
-        
-        // Check if this user has responses for all rehearsals
-        const userResponses = responsesData.filter(r => String(r.user_id) === String(user.id));
-        const missingRehearsals = [];
-        
-        rehearsalsData.forEach(rehearsal => {
-          const hasResponse = userResponses.some(r => r.rehearsal_id === rehearsal.id);
-          if (!hasResponse) {
-            missingRehearsals.push(rehearsal.id);
-          }
-        });
-        
-        // Create responses for any missing rehearsals
-        if (missingRehearsals.length > 0) {
-          console.log("User is missing responses for rehearsals:", missingRehearsals);
-          
-          // Create responses for each missing rehearsal
-          for (const rehearsalId of missingRehearsals) {
-            try {
-              const newResponse = await createResponse(user.id, rehearsalId, true);
-              responsesData.push(newResponse);
-            } catch (err) {
-              console.error(`Failed to create response for rehearsal ${rehearsalId}:`, err);
-            }
-          }
-          
-          // Update the responses state with the new responses
-          setResponses([...responsesData]);
-        }
-        
-        setLoading(false);
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        setError('Failed to load data. Please try again later.');
-        setLoading(false);
-      }
-    };
-    
+    // Call fetchData when component mounts and when user changes
     fetchData();
-  }, [user]);
+  }, [user]);  // Dependency on user means this will run when user changes
   
   const handleResponseChange = async (responseId, attending) => {
     try {
@@ -101,6 +122,42 @@ const Dashboard = () => {
       console.error("Error updating response:", err);
       setError('Failed to update your response. Please try again.');
     }
+  };
+  
+  const handleEditRehearsal = (rehearsalId) => {
+    setEditingRehearsalId(rehearsalId);
+    setSuccess(null);
+  };
+  
+  const handleDeleteRehearsal = (rehearsalId, isRecurring) => {
+    // Find the rehearsal object to show details in the confirmation modal
+    const rehearsalToDelete = rehearsals.find(r => r.id === rehearsalId);
+    if (rehearsalToDelete) {
+      setDeletingRehearsal(rehearsalToDelete);
+      setSuccess(null);
+    }
+  };
+  
+  const handleCloseEditModal = () => {
+    setEditingRehearsalId(null);
+  };
+  
+  const handleCloseDeleteModal = () => {
+    setDeletingRehearsal(null);
+  };
+  
+  const handleRehearsalUpdated = () => {
+    // Refresh rehearsals data
+    fetchData();
+    setEditingRehearsalId(null);
+    setSuccess('Rehearsal updated successfully.');
+  };
+  
+  const handleRehearsalDeleted = () => {
+    // Refresh rehearsals data
+    fetchData();
+    setDeletingRehearsal(null);
+    setSuccess('Rehearsal deleted successfully.');
   };
   
   // Show loading if we're still loading data or if user data isn't available yet
@@ -125,6 +182,7 @@ const Dashboard = () => {
       </div>
       
       {error && <div className="error-message">{error}</div>}
+      {success && <div className="success-message">{success}</div>}
       
       <div className="dashboard-content">
         {/* Schedule Table */}
@@ -134,6 +192,8 @@ const Dashboard = () => {
               rehearsals={rehearsals}
               responses={responses}
               onResponseChange={handleResponseChange}
+              onEditRehearsal={user && user.isAdmin ? handleEditRehearsal : null}
+              onDeleteRehearsal={user && user.isAdmin ? handleDeleteRehearsal : null}
             />
           ) : (
             <p>No upcoming rehearsals scheduled.</p>
@@ -153,6 +213,24 @@ const Dashboard = () => {
           </div>
         )}
       </div>
+      
+      {/* Edit Rehearsal Modal */}
+      {editingRehearsalId && (
+        <EditRehearsalModal
+          rehearsalId={editingRehearsalId}
+          onClose={handleCloseEditModal}
+          onSuccess={handleRehearsalUpdated}
+        />
+      )}
+      
+      {/* Delete Rehearsal Confirmation Modal */}
+      {deletingRehearsal && (
+        <DeleteRehearsalModal
+          rehearsal={deletingRehearsal}
+          onClose={handleCloseDeleteModal}
+          onSuccess={handleRehearsalDeleted}
+        />
+      )}
     </div>
   );
 };

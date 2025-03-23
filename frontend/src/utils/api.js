@@ -221,3 +221,4 @@ export const createResponse = async (userId, rehearsalId, attending = true) => {
     })
   });
 };
+

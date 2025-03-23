@@ -1,15 +1,12 @@
-// src/components/ScheduleTable.js - Updated to better handle user permissions
+// src/components/ScheduleTable.js
 import React, { useState, useEffect, useContext } from 'react';
 import { UserContext } from '../contexts/UserContext';
 import './ScheduleTable.css';
 
-const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsal, onDeleteRehearsal, currentUser }) => {
+const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsal, onDeleteRehearsal }) => {
   const { user } = useContext(UserContext);
   const [users, setUsers] = useState([]);
-  const [showTooltip, setShowTooltip] = useState(null);
-  
-  // Use either the passed-in currentUser or the user from context
-  const activeUser = currentUser || user;
+  const [userResponses, setUserResponses] = useState({});
   
   useEffect(() => {
     // Extract unique users from responses
@@ -25,6 +22,16 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsa
       });
       
       setUsers(uniqueUsers);
+      
+      // Group responses by user_id and rehearsal_id for easier lookup
+      const responseMap = {};
+      responses.forEach(r => {
+        if (!responseMap[r.user_id]) {
+          responseMap[r.user_id] = {};
+        }
+        responseMap[r.user_id][r.rehearsal_id] = r;
+      });
+      setUserResponses(responseMap);
     }
   }, [responses]);
   
@@ -53,36 +60,23 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsa
   
   // Get user's response for a specific rehearsal
   const getUserResponse = (userId, rehearsalId) => {
-    return responses.find(r => r.user_id === userId && r.rehearsal_id === rehearsalId);
+    return userResponses[userId]?.[rehearsalId] || null;
   };
   
   // Handle clicking on a response cell
-  const handleCellClick = (response) => {
-    // Don't do anything if no response or user doesn't match
-    if (!response || user.id !== response.user_id) return;
-
+  const handleCellClick = (userId, rehearsalId, currentResponse) => {
+    // Only allow users to modify their own responses
+    if (!user || String(user.id) !== String(userId)) return;
     
-    // Only allow users to update their own responses, or admins to update any response
-    if (activeUser.id === response.user_id || activeUser.isAdmin) {
-      console.log(`Updating response ${response.id} from ${response.attending} to ${!response.attending}`);
-      onResponseChange(response.id, !response.attending);
+    console.log('Cell clicked:', {userId, rehearsalId, response: currentResponse});
+    
+    if (currentResponse) {
+      // If response exists, toggle it
+      onResponseChange(currentResponse.id, !currentResponse.attending);
     } else {
-      console.log("Cannot update response - user doesn't have permission");
+      // If no response exists, this shouldn't happen, but log for debugging
+      console.error('No response found for user', userId, 'and rehearsal', rehearsalId);
     }
-  };
-  
-  const handleTooltipShow = (content, event) => {
-    if (!content) return;
-    
-    setShowTooltip({
-      content,
-      x: event.clientX,
-      y: event.clientY
-    });
-  };
-  
-  const handleTooltipHide = () => {
-    setShowTooltip(null);
   };
   
   if (users.length === 0 || upcomingRehearsals.length === 0) {
@@ -102,18 +96,18 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsa
                   <div className="rehearsal-time">{formatTime(rehearsal.start_time, rehearsal.end_time)}</div>
                   {rehearsal.title && <div className="rehearsal-title">{rehearsal.title}</div>}
                   
-                  {activeUser && activeUser.isAdmin && onEditRehearsal && onDeleteRehearsal && (
+                  {user && user.isAdmin && (
                     <div className="rehearsal-actions">
                       <button 
                         className="edit-button" 
-                        onClick={() => onEditRehearsal(rehearsal.id)}
+                        onClick={() => onEditRehearsal && onEditRehearsal(rehearsal.id)}
                         title="Edit rehearsal"
                       >
                         Edit
                       </button>
                       <button 
                         className="delete-button" 
-                        onClick={() => onDeleteRehearsal(rehearsal.id, !!rehearsal.recurring_id)}
+                        onClick={() => onDeleteRehearsal && onDeleteRehearsal(rehearsal.id, !!rehearsal.recurring_id)}
                         title="Delete rehearsal"
                       >
                         Delete
@@ -127,7 +121,9 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsa
         </thead>
         <tbody>
           {users.map(tableUser => {
-            const isCurrentUser = tableUser.id === activeUser?.id;
+            const userIdStr = String(tableUser.id);
+            const currentUserIdStr = user ? String(user.id) : '';
+            const isCurrentUser = userIdStr === currentUserIdStr;
             
             return (
               <tr key={tableUser.id} className={isCurrentUser ? 'current-user-row' : ''}>
@@ -135,30 +131,30 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsa
                 
                 {upcomingRehearsals.map(rehearsal => {
                   const response = getUserResponse(tableUser.id, rehearsal.id);
-                  if (!response) return <td key={rehearsal.id}>-</td>;
                   
-                  const canEdit = isCurrentUser || (activeUser && activeUser.isAdmin);
-                  const cellClass = `response-cell ${response.attending ? 'attending' : 'not-attending'} ${canEdit ? 'current-user-cell' : ''}`;
+                  // If there's no response for this user and rehearsal, show a dash
+                  if (!response) {
+                    return (
+                      <td 
+                        key={rehearsal.id}
+                        className={`response-cell ${isCurrentUser ? 'current-user-cell' : ''}`}
+                        onClick={() => console.log('No response available for this cell')}
+                      >
+                        -
+                      </td>
+                    );
+                  }
                   
-                  const tooltipContent = canEdit 
-                    ? 'Click to change response' 
-                    : response.attending 
-                        ? 'User is attending' 
-                        : 'User is not attending';
+                  const cellClass = `response-cell ${response.attending ? 'attending' : 'not-attending'} ${isCurrentUser ? 'current-user-cell' : ''}`;
                   
                   return (
                     <td 
                       key={rehearsal.id}
                       className={cellClass}
-                      onClick={() => handleCellClick(response)}
-                      onMouseEnter={(e) => handleTooltipShow(tooltipContent, e)}
-                      onMouseLeave={handleTooltipHide}
-                      title={tooltipContent}
+                      onClick={() => handleCellClick(tableUser.id, rehearsal.id, response)}
+                      title={isCurrentUser ? 'Click to change your response' : ''}
                     >
                       {response.attending ? 'Ja' : 'Nej'}
-                      {response.comment && (
-                        <span className="comment-indicator" title={response.comment}>📝</span>
-                      )}
                     </td>
                   );
                 })}
@@ -167,19 +163,6 @@ const ScheduleTable = ({ rehearsals, responses, onResponseChange, onEditRehearsa
           })}
         </tbody>
       </table>
-      
-      {showTooltip && (
-        <div 
-          className="tooltip" 
-          style={{ 
-            position: 'fixed', 
-            top: showTooltip.y + 10 + 'px', 
-            left: showTooltip.x + 10 + 'px' 
-          }}
-        >
-          {showTooltip.content}
-        </div>
-      )}
     </div>
   );
 };

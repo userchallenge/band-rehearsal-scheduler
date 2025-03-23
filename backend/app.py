@@ -1152,7 +1152,7 @@ def create_response():
             "comment": existing_response.comment,
             "updated_at": existing_response.updated_at.strftime('%Y-%m-%d %H:%M:%S')
         }), 200
-    
+    # NEXT: Fixa edits av rehearsals. verkar ha försvunnit för admin
     # Create a new response
     new_response = Response(
         user_id=user_id,
@@ -1184,6 +1184,23 @@ def create_response():
         "comment": new_response.comment,
         "updated_at": new_response.updated_at.strftime('%Y-%m-%d %H:%M:%S')
     }), 201
+
+@app.route('/api/users/profile', methods=['GET'])
+def get_user_profile():
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    # Users can only get their own profile info
+    return jsonify({
+        'id': current_user.id,
+        'username': current_user.username,
+        'email': current_user.email,
+        'first_name': current_user.first_name,
+        'last_name': current_user.last_name,
+        'is_admin': current_user.is_admin
+    }), 200
 
 if __name__ == '__main__':
     app.run(debug=True)

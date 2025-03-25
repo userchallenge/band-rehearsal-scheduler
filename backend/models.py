@@ -18,9 +18,14 @@ class User(db.Model):
     last_name = db.Column(db.String(100))
     is_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_super_admin = db.Column(db.Boolean, default=False)
     
     # Relationship with Responses
     responses = db.relationship('Response', back_populates='user', cascade='all, delete-orphan')
+
+    # Update relationships
+    band_memberships = db.relationship('BandMembership', back_populates='user', cascade='all, delete-orphan')
+    created_bands = db.relationship('Band', foreign_keys='Band.created_by', backref='creator')
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -42,9 +47,11 @@ class Rehearsal(db.Model):
     title = db.Column(db.String(100), nullable=True)  # Optional title
     recurring_id = db.Column(db.String(36), nullable=True)  # UUID to group recurring events
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+    band_id = db.Column(db.Integer, db.ForeignKey('bands.id'), nullable=False)
+
     # Relationship with Responses
     responses = db.relationship('Response', back_populates='rehearsal', cascade='all, delete-orphan')
+    band = db.relationship('Band', back_populates='rehearsals')
     
     def __repr__(self):
         time_str = f" {self.start_time.strftime('%H:%M')}" if self.start_time else ""
@@ -119,3 +126,40 @@ class Invitation(db.Model):
         
     def __repr__(self):
         return f'<LogEntry {self.user.username} - {self.action} - {self.timestamp}>'
+    
+class Band(db.Model):
+    __tablename__ = 'bands'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Relationships
+    rehearsals = db.relationship('Rehearsal', back_populates='band', cascade='all, delete-orphan')
+    band_memberships = db.relationship('BandMembership', back_populates='band', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<Band {self.name}>'
+
+class BandMembership(db.Model):
+    __tablename__ = 'band_memberships'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    band_id = db.Column(db.Integer, db.ForeignKey('bands.id'), nullable=False)
+    role = db.Column(db.String(20), default='member')  # 'admin', 'member'
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', back_populates='band_memberships')
+    band = db.relationship('Band', back_populates='band_memberships')
+    
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'band_id', name='unique_user_band'),
+    )
+    
+    def __repr__(self):
+        return f'<BandMembership {self.user.username} - {self.band.name}: {self.role}>'

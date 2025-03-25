@@ -1,17 +1,20 @@
-// src/App.js - Complete version with invitation routes
-import React, { useState, useEffect } from 'react';
+// src/App.js
+import React, { useState, useEffect, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { UserProvider } from './contexts/UserContext';
+import { UserProvider, UserContext } from './contexts/UserContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AdminPanel from './pages/AdminPanel';
-import RegisterWithInvitation from './pages/RegisterWithInvitation';
+import BandSelection from './components/BandSelection';
 import Navbar from './components/Navbar';
+import SuperAdminPanel from './pages/SuperAdminPanel';
 import { getToken } from './utils/auth';
 import { manageRehearsals } from './utils/api';
 import './App.css';
 
-function App() {
+// Inner app component that has access to UserContext
+const AppContent = () => {
+  const { user, currentBand, setCurrentBand, loading } = useContext(UserContext);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   
@@ -23,10 +26,8 @@ function App() {
         const authenticated = !!token;
         setIsAuthenticated(authenticated);
         
-        // If not authenticated, ensure we're on the login page or register page
-        if (!authenticated && 
-            window.location.pathname !== '/login' && 
-            !window.location.pathname.startsWith('/register/')) {
+        // If not authenticated, ensure we're on the login page
+        if (!authenticated && window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
       } catch (err) {
@@ -38,12 +39,12 @@ function App() {
     // Check immediately
     checkAuth();
     
-    // If authenticated, try to manage rehearsals automatically
+    // If authenticated and band is selected, try to manage rehearsals automatically
     const autoManageRehearsals = async () => {
       const token = getToken();
-      if (token) {
+      if (token && currentBand) {
         try {
-          await manageRehearsals();
+          await manageRehearsals(currentBand.id);
           console.log('Rehearsals automatically updated on app load');
         } catch (err) {
           console.error('Error in auto rehearsal management:', err);
@@ -52,7 +53,9 @@ function App() {
       }
     };
     
-    autoManageRehearsals();
+    if (user && currentBand) {
+      autoManageRehearsals();
+    }
     
     // Set up a listener for storage events (if token changes in another tab)
     const handleStorageChange = (e) => {
@@ -76,27 +79,73 @@ function App() {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('auth-changed', handleAuthChanged);
     };
-  }, []);
+  }, [user, currentBand]);
   
-  if (!isInitialized) {
-    return <div>Loading...</div>;
+  const handleBandSelect = async (band) => {
+    console.log("Band selected:", band);
+    if (band) {
+      setCurrentBand(band);
+      
+      // Now that we have a band, we can manage rehearsals
+      try {
+        await manageRehearsals(band.id);
+        console.log(`Rehearsals automatically updated for band: ${band.name}`);
+      } catch (err) {
+        console.error('Error in rehearsal management after band selection:', err);
+        // Don't block navigation if this fails
+      }
+    }
+  };
+  
+  if (!isInitialized || loading) {
+    return <div className="loading-container">Loading...</div>;
   }
   
   return (
+    <div className="app">
+      {isAuthenticated && <Navbar />}
+      <main className="main-content">
+        {!isAuthenticated ? (
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="*" element={<Navigate to="/login" />} />
+          </Routes>
+        ) : !currentBand ? (
+          <BandSelection onBandSelect={handleBandSelect} />
+        ) : (
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route 
+              path="/admin" 
+              element={(currentBand?.role === 'admin' || user?.isSuperAdmin) ? 
+                <AdminPanel /> : <Navigate to="/" />
+              } 
+            />
+            <Route 
+              path="/super-admin" 
+              element={user?.isSuperAdmin ? <SuperAdminPanel /> : <Navigate to="/" />} 
+            />
+            <Route 
+              path="/select-band" 
+              element={<BandSelection onBandSelect={handleBandSelect} />} 
+            />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        )}
+      </main>
+    </div>
+  );
+};
+
+// Main App component
+
+// NEXT: Kan inte se admin-panelen när jag är inloggad som admin, 
+// "Failed to load data. Please try again later." - istf att antingen se dashboard e dyl.
+function App() {
+  return (
     <UserProvider>
       <Router>
-        <div className="app">
-          {isAuthenticated && <Navbar />}
-          <main className="main-content">
-            <Routes>
-              <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
-              <Route path="/register/:token" element={<RegisterWithInvitation />} />
-              <Route path="/" element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} />
-              <Route path="/admin" element={isAuthenticated ? <AdminPanel /> : <Navigate to="/login" />} />
-              <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/login"} />} />
-            </Routes>
-          </main>
-        </div>
+        <AppContent />
       </Router>
     </UserProvider>
   );

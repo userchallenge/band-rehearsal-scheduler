@@ -1,29 +1,32 @@
 // src/components/Navbar.js
 import React, { useContext } from 'react';
-// import { Link, useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
 import { removeToken } from '../utils/auth';
 import './Navbar.css';
 
 const Navbar = () => {
-  const { user, setUser } = useContext(UserContext);
-  // const navigate = useNavigate();
+  const { user, currentBand, setCurrentBand, setUser } = useContext(UserContext);
   
   const handleLogout = () => {
     // Clear data first
     removeToken();
     localStorage.removeItem('user_info');
+    localStorage.removeItem('current_band_id');
+    localStorage.removeItem('current_band_name');
+    localStorage.removeItem('current_band_role');
+    
+    // Update context state
     setUser(null);
+    setCurrentBand(null);
     
     // Then force a complete navigation (which reloads the app state)
     window.location.href = '/login';
-
-    setTimeout(() => {
-      removeToken();
-      localStorage.removeItem('user_info');
-      setUser(null);
-    }, 10);
+  };
+  
+  const handleSwitchBand = () => {
+    // Call setCurrentBand with null to clear band selection
+    setCurrentBand(null);
   };
   
   // Add a null check to prevent rendering errors
@@ -36,13 +39,32 @@ const Navbar = () => {
       <div className="logo">
         <Link to="/">Band Rehearsal Scheduler</Link>
       </div>
+      
+      {currentBand && (
+        <div className="current-band">
+          <span className="band-name">{currentBand.name}</span>
+          <button 
+            className="switch-band-button" 
+            onClick={handleSwitchBand}
+            type="button"
+          >
+            Switch Band
+          </button>
+        </div>
+      )}
+      
       <ul className="nav-links">
         <li>
           <Link to="/">Dashboard</Link>
         </li>
-        {user && user.isAdmin === true && (
+        {currentBand && (currentBand.role === 'admin' || user.isSuperAdmin) && (
           <li>
-            <Link to="/admin">Admin</Link>
+            <Link to="/admin">Band Admin</Link>
+          </li>
+        )}
+        {user.isSuperAdmin && (
+          <li>
+            <Link to="/super-admin">Super Admin</Link>
           </li>
         )}
       </ul>

@@ -3,7 +3,6 @@ import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UserContext } from '../contexts/UserContext';
 import { loginUser, setToken } from '../utils/auth';
-// Don't import manageRehearsals here - we'll handle it differently
 import './Login.css';
 
 const Login = () => {
@@ -34,35 +33,32 @@ const Login = () => {
       window.dispatchEvent(new Event('auth-changed'));
       
       // Save user info in context
-      console.log('Setting user context with:', { id: data.user_id, isAdmin: data.is_admin });
+      console.log('Setting user context with:', {
+        id: data.user_id,
+        isAdmin: data.is_admin,
+        isSuperAdmin: data.is_super_admin,
+        bands: data.bands || []
+      });
+      
       setUser({
         id: data.user_id,
-        isAdmin: data.is_admin
+        isAdmin: data.is_admin,
+        isSuperAdmin: data.is_super_admin,
+        bands: data.bands || []
       });
       
       // Store user info in localStorage as backup
       localStorage.setItem('user_info', JSON.stringify({
         id: data.user_id,
-        isAdmin: data.is_admin
+        isAdmin: data.is_admin,
+        isSuperAdmin: data.is_super_admin,
+        bands: data.bands || []
       }));
       
       console.log('Navigating to dashboard...');
       
-      // Navigate first, attempt to manage rehearsals later
+      // Navigate to dashboard or band selection
       navigate('/');
-      
-      // Try to manage rehearsals after navigation
-      // This way, even if it fails, the user still gets logged in
-      setTimeout(async () => {
-        try {
-          // Dynamically import the API functions to avoid circular dependencies
-          const api = await import('../utils/api');
-          await api.manageRehearsals();
-          console.log('Rehearsals automatically updated on login');
-        } catch (rehearsalErr) {
-          console.error('Failed to automatically update rehearsals:', rehearsalErr);
-        }
-      }, 500);
       
     } catch (err) {
       console.error('Login error:', err);

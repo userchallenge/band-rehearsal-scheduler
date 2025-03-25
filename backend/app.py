@@ -13,7 +13,9 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, create_access_token
 # Add this import at the top of app.py
 from invitation_email import send_invitation_email
-from models import db, User, Rehearsal, Response, LogEntry, Invitation
+from models import (Band, BandMembership, Invitation, LogEntry, Rehearsal,
+                    Response, User, db)
+from sqlalchemy import text
 from werkzeug.security import check_password_hash, generate_password_hash
 
 # Configure logging
@@ -152,15 +154,20 @@ def get_user_from_token():
     auth_header = request.headers.get('Authorization', '')
     
     if not auth_header or not auth_header.startswith('Bearer '):
+        app.logger.error("Missing or invalid Authorization header")
         return None
     
     token = auth_header[7:]  # Remove 'Bearer ' prefix
+    
+    if not token or token == 'null' or token == 'undefined':
+        app.logger.error("Empty or invalid token")
+        return None
     
     try:
         # Simple extraction from token
         import jwt as pyjwt
         secret_key = app.config['JWT_SECRET_KEY']
-        decoded = pyjwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_signature": False})
+        decoded = pyjwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_signature": True})
         user_id = decoded.get('sub')
         
         if user_id:
@@ -171,10 +178,20 @@ def get_user_from_token():
                 pass
             
             # Get the user from database
-            return User.query.get(user_id)
+            user = User.query.get(user_id)
+            if user:
+                # Add super_admin flag to the user object
+                user.is_super_admin = bool(decoded.get('is_super_admin', False))
+                return user
+            else:
+                app.logger.error(f"User not found: {user_id}")
+        else:
+            app.logger.error("No user_id in token")
+            
+    except pyjwt.exceptions.InvalidTokenError as e:
+        app.logger.error(f"Invalid token error: {str(e)}")
     except Exception as e:
-        logger.error(f"Error decoding token: {str(e)}")
-        return None
+        app.logger.error(f"Error decoding token: {str(e)}")
     
     return None
 
@@ -186,22 +203,50 @@ def test_endpoint():
 # Authentication routes
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    try:
-        data = request.get_json()
-        user = User.query.filter_by(username=data.get('username')).first()
+    data = request.get_json()
+    user = User.query.filter_by(username=data.get('username')).first()
+    
+    if user and user.check_password(data.get('password')):
+        # Get user's bands
+        bands_query = """
+            SELECT b.id, b.name, bm.role
+            FROM bands b
+            JOIN band_memberships bm ON b.id = bm.band_id
+            WHERE bm.user_id = :user_id
+        """
+        result = db.session.execute(text(bands_query), {'user_id': user.id})
         
-        if user and user.check_password(data.get('password')):
-            # Create token with string identity
-            identity_str = str(user.id)
-            access_token = create_access_token(identity=identity_str)
-            
-            return jsonify(access_token=access_token, user_id=user.id, is_admin=user.is_admin), 200
+        bands = []
+        for row in result:
+            bands.append({
+                'id': row.id,
+                'name': row.name,
+                'role': row.role
+            })
         
-        return jsonify({"msg": "Bad username or password"}), 401
-    except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        db.session.rollback()
-        return jsonify({"msg": "An error occurred during login"}), 500
+        # Add claims to token
+        additional_claims = {
+            'is_admin': user.is_admin,
+            'is_super_admin': bool(user.is_super_admin),
+            'bands': bands
+        }
+        
+        # Create token with string identity and additional claims
+        identity_str = str(user.id)
+        access_token = create_access_token(
+            identity=identity_str,
+            additional_claims=additional_claims
+        )
+        
+        return jsonify(
+            access_token=access_token, 
+            user_id=user.id, 
+            is_admin=user.is_admin,
+            is_super_admin=bool(user.is_super_admin),
+            bands=bands
+        ), 200
+    
+    return jsonify({"msg": "Bad username or password"}), 401
 
 # User routes
 @app.route('/api/users', methods=['GET'])
@@ -269,35 +314,45 @@ def create_user():
         return jsonify({"msg": "Failed to create user"}), 500
 
 # Rehearsal routes
+# Update rehearsals endpoint
 @app.route('/api/rehearsals', methods=['GET'])
 def get_rehearsals():
-    try:
-        # Get the token from the header
-        auth_header = request.headers.get('Authorization', '')
-        
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return jsonify({"msg": "Missing or invalid Authorization header"}), 401
-        
-        # Get rehearsals data
-        rehearsals = Rehearsal.query.order_by(Rehearsal.date).all()
-        result = []
-        
-        for rehearsal in rehearsals:
-            result.append({
-                'id': rehearsal.id,
-                'date': rehearsal.date.strftime('%Y-%m-%d'),
-                'start_time': rehearsal.start_time.strftime('%H:%M') if rehearsal.start_time else None,
-                'end_time': rehearsal.end_time.strftime('%H:%M') if rehearsal.end_time else None,
-                'title': rehearsal.title,
-                'recurring_id': rehearsal.recurring_id,
-                'responses': len(rehearsal.responses)
-            })
-        
-        return jsonify(result), 200
-    except Exception as e:
-        logger.error(f"Error getting rehearsals: {str(e)}")
-        db.session.rollback()
-        return jsonify({"msg": f"Error: {str(e)}"}), 500
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    # Get band_id from query params
+    band_id = request.args.get('band_id', type=int)
+    
+    if not band_id:
+        return jsonify({"msg": "band_id parameter is required"}), 400
+    
+    # Check if user is member of the band
+    is_member = BandMembership.query.filter_by(
+        user_id=current_user.id, 
+        band_id=band_id
+    ).first() is not None
+    
+    if not (current_user.is_super_admin or is_member):
+        return jsonify({"msg": "Access denied"}), 403
+    
+    # Get rehearsals for this band
+    rehearsals = Rehearsal.query.filter_by(band_id=band_id).order_by(Rehearsal.date).all()
+    
+    result = []
+    for rehearsal in rehearsals:
+        result.append({
+            'id': rehearsal.id,
+            'date': rehearsal.date.strftime('%Y-%m-%d'),
+            'start_time': rehearsal.start_time.strftime('%H:%M') if rehearsal.start_time else None,
+            'end_time': rehearsal.end_time.strftime('%H:%M') if rehearsal.end_time else None,
+            'title': rehearsal.title,
+            'recurring_id': rehearsal.recurring_id,
+            'responses': len(rehearsal.responses)
+        })
+    
+    return jsonify(result), 200
 
 @app.route('/api/rehearsals/<int:rehearsal_id>', methods=['GET'])
 def get_rehearsal(rehearsal_id):
@@ -607,92 +662,189 @@ def manage_rehearsals():
         return jsonify({"msg": "Failed to update rehearsals"}), 500
 
 # Response routes
+# Update these functions in app.py
+
 @app.route('/api/responses', methods=['GET'])
 def get_responses():
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+        
+    rehearsal_id = request.args.get('rehearsal_id')
+    band_id = request.args.get('band_id')
+    
+    if not band_id:
+        return jsonify({"msg": "band_id parameter is required"}), 400
+    
+    # Check if user is member of the band
+    is_member = BandMembership.query.filter_by(
+        user_id=current_user.id, 
+        band_id=band_id
+    ).first() is not None
+    
+    if not (current_user.is_super_admin or is_member):
+        return jsonify({"msg": "Access denied"}), 403
+        
     try:
-        current_user = get_user_from_token()
+        # Get responses for rehearsals in this band
+        query = """
+            SELECT r.id, r.user_id, u.username, r.rehearsal_id, 
+                   re.date as rehearsal_date, r.attending, r.comment, 
+                   r.updated_at
+            FROM responses r
+            JOIN users u ON r.user_id = u.id
+            JOIN rehearsals re ON r.rehearsal_id = re.id
+            WHERE re.band_id = :band_id
+        """
         
-        if not current_user:
-            return jsonify({"msg": "Authentication required"}), 401
-            
-        rehearsal_id = request.args.get('rehearsal_id')
-        
-        query = Response.query
+        params = {'band_id': band_id}
         
         if rehearsal_id:
-            query = query.filter_by(rehearsal_id=rehearsal_id)
+            query += " AND r.rehearsal_id = :rehearsal_id"
+            params['rehearsal_id'] = rehearsal_id
         
-        responses = query.all()
-        result = []
+        result = db.session.execute(text(query), params)
         
-        for response in responses:
-            result.append({
-                'id': response.id,
-                'user_id': response.user_id,
-                'username': response.user.username,
-                'rehearsal_id': response.rehearsal_id,
-                'rehearsal_date': response.rehearsal.date.strftime('%Y-%m-%d'),
-                'attending': response.attending,
-                'comment': response.comment,
-                'updated_at': response.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+        responses = []
+        for row in result:
+            # Handle the date field safely
+            rehearsal_date = row.rehearsal_date
+            if isinstance(rehearsal_date, str):
+                rehearsal_date_str = rehearsal_date
+            else:
+                rehearsal_date_str = rehearsal_date.strftime('%Y-%m-%d')
+                
+            # Handle updated_at field safely
+            updated_at = row.updated_at
+            if isinstance(updated_at, str):
+                updated_at_str = updated_at
+            else:
+                updated_at_str = updated_at.strftime('%Y-%m-%d %H:%M:%S') if updated_at else None
+                
+            responses.append({
+                'id': row.id,
+                'user_id': row.user_id,
+                'username': row.username,
+                'rehearsal_id': row.rehearsal_id,
+                'rehearsal_date': rehearsal_date_str,
+                'attending': bool(row.attending),
+                'comment': row.comment,
+                'updated_at': updated_at_str
             })
         
-        return jsonify(result), 200
+        return jsonify(responses), 200
     except Exception as e:
-        logger.error(f"Error getting responses: {str(e)}")
-        db.session.rollback()
-        return jsonify({"msg": "Failed to get responses"}), 500
+        app.logger.error(f"Error in get_responses: {str(e)}")
+        return jsonify({"msg": f"Error retrieving responses: {str(e)}"}), 500
 
 @app.route('/api/responses/<int:response_id>', methods=['PUT'])
 def update_response(response_id):
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    band_id = request.args.get('band_id')
+    
+    if not band_id:
+        return jsonify({"msg": "band_id parameter is required"}), 400
+    
+    # Check if user is member of the band
+    is_member = BandMembership.query.filter_by(
+        user_id=current_user.id, 
+        band_id=band_id
+    ).first() is not None
+    
+    if not (current_user.is_super_admin or is_member):
+        return jsonify({"msg": "Access denied"}), 403
+    
     try:
-        current_user = get_user_from_token()
+        # Get the response and check if it belongs to a rehearsal in this band
+        response_query = """
+            SELECT r.*, re.band_id
+            FROM responses r
+            JOIN rehearsals re ON r.rehearsal_id = re.id
+            WHERE r.id = :response_id
+        """
+        response_result = db.session.execute(text(response_query), {'response_id': response_id})
+        response_row = response_result.fetchone()
         
-        if not current_user:
-            return jsonify({"msg": "Authentication required"}), 401
-        
-        response = Response.query.get_or_404(response_id)
+        if not response_row:
+            return jsonify({"msg": "Response not found"}), 404
+            
+        # Check if the response belongs to a rehearsal in this band
+        if str(response_row.band_id) != str(band_id):
+            return jsonify({"msg": "Response does not belong to this band"}), 403
         
         # Only allow users to update their own responses, unless they're an admin
-        if response.user_id != current_user.id and not current_user.is_admin:
-            return jsonify({"msg": "You can only update your own responses"}), 403  
+        is_band_admin = BandMembership.query.filter_by(
+            user_id=current_user.id, 
+            band_id=band_id,
+            role='admin'
+        ).first() is not None
+        
+        if response_row.user_id != current_user.id and not (is_band_admin or current_user.is_super_admin):
+            return jsonify({"msg": "You can only update your own responses"}), 403
         
         data = request.get_json()
-        old_attending = "Ja" if response.attending else "Nej"
-        old_comment = response.comment or ""
+        
+        # Update the response
+        update_query = "UPDATE responses SET "
+        update_params = {'response_id': response_id}
         
         if 'attending' in data:
-            response.attending = data['attending']
+            update_query += "attending = :attending, "
+            update_params['attending'] = data['attending']
         
         if 'comment' in data:
-            response.comment = data['comment']
+            update_query += "comment = :comment, "
+            update_params['comment'] = data['comment']
         
+        update_query += "updated_at = CURRENT_TIMESTAMP WHERE id = :response_id"
+        
+        db.session.execute(text(update_query), update_params)
         db.session.commit()
         
-        # Log the update
-        new_attending = "Ja" if response.attending else "Nej"
-        new_comment = response.comment or ""
+        # Get the updated response
+        updated_query = """
+            SELECT r.*, u.username, re.date as rehearsal_date
+            FROM responses r
+            JOIN users u ON r.user_id = u.id
+            JOIN rehearsals re ON r.rehearsal_id = re.id
+            WHERE r.id = :response_id
+        """
+        updated_result = db.session.execute(text(updated_query), {'response_id': response_id})
+        updated_row = updated_result.fetchone()
         
-        log = LogEntry(
-            user_id=current_user.id,
-            action="update",
-            entity_type="response",
-            entity_id=response_id,
-            old_value=f"Attending: {old_attending}, Comment: {old_comment}",
-            new_value=f"Attending: {new_attending}, Comment: {new_comment}"
-        )
-        db.session.add(log)
-        db.session.commit()
+        # Format dates for the response
+        rehearsal_date = updated_row.rehearsal_date
+        if isinstance(rehearsal_date, str):
+            rehearsal_date_str = rehearsal_date
+        else:
+            rehearsal_date_str = rehearsal_date.strftime('%Y-%m-%d')
+            
+        updated_at = updated_row.updated_at
+        if isinstance(updated_at, str):
+            updated_at_str = updated_at
+        else:
+            updated_at_str = updated_at.strftime('%Y-%m-%d %H:%M:%S') if updated_at else None
         
         return jsonify({
-            'id': response.id,
-            'attending': response.attending,
-            'comment': response.comment
+            'id': updated_row.id,
+            'user_id': updated_row.user_id,
+            'username': updated_row.username,
+            'rehearsal_id': updated_row.rehearsal_id,
+            'rehearsal_date': rehearsal_date_str,
+            'attending': bool(updated_row.attending),
+            'comment': updated_row.comment,
+            'updated_at': updated_at_str
         }), 200
+        
     except Exception as e:
-        logger.error(f"Error updating response: {str(e)}")
         db.session.rollback()
-        return jsonify({"msg": "Failed to update response"}), 500
+        app.logger.error(f"Error in update_response: {str(e)}")
+        return jsonify({"msg": f"Error updating response: {str(e)}"}), 500
 
 @app.route('/api/email/send', methods=['POST'])
 def trigger_email():
@@ -1152,7 +1304,7 @@ def create_response():
             "comment": existing_response.comment,
             "updated_at": existing_response.updated_at.strftime('%Y-%m-%d %H:%M:%S')
         }), 200
-    # NEXT: Fixa edits av rehearsals. verkar ha försvunnit för admin
+
     # Create a new response
     new_response = Response(
         user_id=user_id,
@@ -1192,15 +1344,230 @@ def get_user_profile():
     if not current_user:
         return jsonify({"msg": "Authentication required"}), 401
     
-    # Users can only get their own profile info
+    # Get user bands
+    bands_query = """
+        SELECT b.id, b.name, bm.role
+        FROM bands b
+        JOIN band_memberships bm ON b.id = bm.band_id
+        WHERE bm.user_id = :user_id
+    """
+    result = db.session.execute(text(bands_query), {'user_id': current_user.id})
+    
+    bands = []
+    for row in result:
+        bands.append({
+            'id': row.id,
+            'name': row.name,
+            'role': row.role
+        })
+    
     return jsonify({
         'id': current_user.id,
         'username': current_user.username,
         'email': current_user.email,
         'first_name': current_user.first_name,
         'last_name': current_user.last_name,
-        'is_admin': current_user.is_admin
+        'is_admin': current_user.is_admin,
+        'is_super_admin': getattr(current_user, 'is_super_admin', False),
+        'bands': bands
     }), 200
+
+@app.route('/api/bands', methods=['GET'])
+def get_bands():
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    try:
+        # Super admin sees all bands
+        if current_user.is_super_admin:
+            bands_query = """
+                SELECT b.id, b.name, b.description, b.created_at, b.created_by, 
+                       u.username as creator_name,
+                       (SELECT COUNT(*) FROM band_memberships WHERE band_id = b.id) as member_count
+                FROM bands b
+                LEFT JOIN users u ON b.created_by = u.id
+            """
+            result = db.session.execute(text(bands_query))
+            bands = []
+            for row in result:
+                # Handle created_at properly regardless of its type
+                if row.created_at is None:
+                    created_at_str = None
+                elif isinstance(row.created_at, str):
+                    created_at_str = row.created_at  # Already a string
+                else:
+                    created_at_str = row.created_at.strftime('%Y-%m-%d')
+                    
+                bands.append({
+                    'id': row.id,
+                    'name': row.name,
+                    'description': row.description,
+                    'created_at': created_at_str,
+                    'created_by': row.created_by,
+                    'creator_name': row.creator_name,
+                    'member_count': row.member_count,
+                    'role': 'super_admin'  # Super admin role for all bands
+                })
+        else:
+            # Regular users see only their bands with their role
+            memberships_query = """
+                SELECT b.id, b.name, b.description, b.created_at, b.created_by,
+                       u.username as creator_name, 
+                       bm.role,
+                       (SELECT COUNT(*) FROM band_memberships WHERE band_id = b.id) as member_count
+                FROM bands b
+                JOIN band_memberships bm ON b.id = bm.band_id
+                LEFT JOIN users u ON b.created_by = u.id
+                WHERE bm.user_id = :user_id
+            """
+            result = db.session.execute(text(memberships_query), {'user_id': current_user.id})
+            bands = []
+            for row in result:
+                # Handle created_at properly regardless of its type
+                if row.created_at is None:
+                    created_at_str = None
+                elif isinstance(row.created_at, str):
+                    created_at_str = row.created_at  # Already a string
+                else:
+                    created_at_str = row.created_at.strftime('%Y-%m-%d')
+                    
+                bands.append({
+                    'id': row.id,
+                    'name': row.name,
+                    'description': row.description,
+                    'created_at': created_at_str,
+                    'created_by': row.created_by,
+                    'creator_name': row.creator_name,
+                    'role': row.role,
+                    'member_count': row.member_count
+                })
+        
+        return jsonify(bands), 200
+    except Exception as e:
+        app.logger.error(f"Error in get_bands: {str(e)}")
+        return jsonify({"msg": f"Error retrieving bands: {str(e)}"}), 500
+
+@app.route('/api/bands', methods=['POST'])
+def create_band():
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    try:
+        data = request.get_json()
+        
+        if not data.get('name'):
+            return jsonify({"msg": "Band name is required"}), 400
+        
+        # Create new band with direct SQL
+        insert_band_query = """
+            INSERT INTO bands (name, description, created_by)
+            VALUES (:name, :description, :created_by)
+        """
+        result = db.session.execute(
+            text(insert_band_query), 
+            {
+                'name': data.get('name'), 
+                'description': data.get('description', ''),
+                'created_by': current_user.id
+            }
+        )
+        db.session.flush()
+        
+        # Get the new band's ID
+        band_id_query = "SELECT id FROM bands ORDER BY id DESC LIMIT 1"
+        band_id_result = db.session.execute(text(band_id_query))
+        band_id = band_id_result.fetchone()[0]
+        
+        # Add creator as admin
+        insert_membership_query = """
+            INSERT INTO band_memberships (user_id, band_id, role)
+            VALUES (:user_id, :band_id, 'admin')
+        """
+        db.session.execute(
+            text(insert_membership_query),
+            {'user_id': current_user.id, 'band_id': band_id}
+        )
+        
+        db.session.commit()
+        
+        return jsonify({
+            'id': band_id,
+            'name': data.get('name'),
+            'description': data.get('description', ''),
+            'created_by': current_user.id,
+            'role': 'admin'
+        }), 201
+    
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error in create_band: {str(e)}")
+        return jsonify({"msg": f"Error creating band: {str(e)}"}), 500
+
+# Add band member endpoint
+@app.route('/api/bands/<int:band_id>/members', methods=['POST'])
+def add_band_member(band_id):
+    current_user = get_user_from_token()
+    
+    if not current_user:
+        return jsonify({"msg": "Authentication required"}), 401
+    
+    # Check if current user is band admin or super admin
+    is_band_admin = BandMembership.query.filter_by(
+        user_id=current_user.id, 
+        band_id=band_id,
+        role='admin'
+    ).first() is not None
+    
+    if not (current_user.is_super_admin or is_band_admin):
+        return jsonify({"msg": "Admin privileges required"}), 403
+    
+    data = request.get_json()
+    user_id = data.get('user_id')
+    role = data.get('role', 'member')
+    
+    # Check if user exists
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+    
+    # Check if membership already exists
+    existing = BandMembership.query.filter_by(
+        user_id=user_id,
+        band_id=band_id
+    ).first()
+    
+    if existing:
+        # Update role if different
+        if existing.role != role:
+            existing.role = role
+            db.session.commit()
+            
+        return jsonify({
+            'id': existing.id,
+            'user_id': existing.user_id,
+            'band_id': existing.band_id,
+            'role': existing.role
+        }), 200
+    
+    # Create new membership
+    membership = BandMembership(
+        user_id=user_id,
+        band_id=band_id,
+        role=role
+    )
+    db.session.add(membership)
+    db.session.commit()
+    
+    return jsonify({
+        'id': membership.id,
+        'user_id': membership.user_id,
+        'band_id': membership.band_id,
+        'role': membership.role
+    }), 201
 
 if __name__ == '__main__':
     app.run(debug=True)

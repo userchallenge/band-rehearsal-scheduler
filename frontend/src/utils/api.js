@@ -68,64 +68,26 @@ const request = async (endpoint, options = {}) => {
   }
 };
 
-// Rehearsals
-export const getRehearsals = () => {
-  return request('rehearsals');
-};
 
-export const getRehearsalById = (id) => {
-  return request(`rehearsals/${id}`);
-};
 
-export const createRehearsal = (rehearsalData) => {
-  console.log('API createRehearsal called with data:', rehearsalData);
-  
-  // Make sure we're passing a proper object
-  if (!rehearsalData || typeof rehearsalData !== 'object') {
-    console.error('Invalid rehearsal data type:', typeof rehearsalData);
-    throw new Error('Invalid rehearsal data format');
+export const updateResponse = (responseId, data, bandId) => {
+  if (!bandId) {
+    console.error('Band ID is required to update response');
+    return Promise.reject(new Error('Band ID is required'));
   }
   
-  return request('rehearsals', {
-    method: 'POST',
-    body: JSON.stringify(rehearsalData),
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-};
-
-export const updateRehearsal = (id, data) => {
-  return request(`rehearsals/${id}`, {
+  return request(`responses/${responseId}?band_id=${bandId}`, {
     method: 'PUT',
     body: JSON.stringify(data)
   });
 };
 
-export const deleteRehearsal = (id, deleteAllRecurring = false) => {
-  return request(`rehearsals/${id}?delete_all_recurring=${deleteAllRecurring}`, {
-    method: 'DELETE'
-  });
-};
-
-export const manageRehearsals = () => {
-  return request('rehearsals/manage', {
-    method: 'POST'
-  });
-};
-
-// Responses
-export const getResponses = (rehearsalId = null) => {
-  const url = rehearsalId ? `responses?rehearsal_id=${rehearsalId}` : 'responses';
-  return request(url);
-};
-
-export const updateResponse = (responseId, data) => {
-  return request(`responses/${responseId}`, {
-    method: 'PUT',
-    body: JSON.stringify(data)
-  });
-};
+// export const updateResponse = (responseId, data) => {
+//   return request(`responses/${responseId}`, {
+//     method: 'PUT',
+//     body: JSON.stringify(data)
+//   });
+// };
 
 // Users
 export const getUsers = () => {
@@ -222,3 +184,125 @@ export const createResponse = async (userId, rehearsalId, attending = true) => {
   });
 };
 
+// Add these functions to src/utils/api.js
+
+// Band management
+export const getBands = () => {
+  return request('bands');
+};
+
+export const createBand = (bandData) => {
+  return request('bands', {
+    method: 'POST',
+    body: JSON.stringify(bandData)
+  });
+};
+
+export const addBandMember = (bandId, userData) => {
+  return request(`bands/${bandId}/members`, {
+    method: 'POST',
+    body: JSON.stringify(userData)
+  });
+};
+
+export const getBandMembers = (bandId) => {
+  return request(`bands/${bandId}/members`);
+};
+
+export const removeBandMember = (bandId, userId) => {
+  return request(`bands/${bandId}/members/${userId}`, {
+    method: 'DELETE'
+  });
+};
+
+// Update existing functions to include band_id parameter
+export const getRehearsals = (bandId) => {
+  if (!bandId) {
+    console.error('Band ID is required to get rehearsals');
+    return Promise.reject(new Error('Band ID is required'));
+  }
+  return request(`rehearsals?band_id=${bandId}`);
+};
+
+export const getRehearsalById = (id, bandId) => {
+  if (!bandId) {
+    console.error('Band ID is required to get rehearsal');
+    return Promise.reject(new Error('Band ID is required'));
+  }
+  return request(`rehearsals/${id}?band_id=${bandId}`);
+};
+
+export const createRehearsal = (rehearsalData, bandId) => {
+  if (!bandId) {
+    console.error('Band ID is required to create rehearsal');
+    return Promise.reject(new Error('Band ID is required'));
+  }
+  
+  const data = { ...rehearsalData, band_id: bandId };
+  return request('rehearsals', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+};
+
+export const updateRehearsal = (id, data, bandId) => {
+  if (!bandId) {
+    console.error('Band ID is required to update rehearsal');
+    return Promise.reject(new Error('Band ID is required'));
+  }
+  
+  const updatedData = { ...data, band_id: bandId };
+  return request(`rehearsals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(updatedData)
+  });
+};
+
+export const deleteRehearsal = (id, deleteAllRecurring = false, bandId) => {
+  if (!bandId) {
+    console.error('Band ID is required to delete rehearsal');
+    return Promise.reject(new Error('Band ID is required'));
+  }
+  
+  return request(`rehearsals/${id}?delete_all_recurring=${deleteAllRecurring}&band_id=${bandId}`, {
+    method: 'DELETE'
+  });
+};
+
+export const manageRehearsals = (bandId) => {
+  if (!bandId) {
+    console.error('Band ID is required to manage rehearsals');
+    return Promise.reject(new Error('Band ID is required'));
+  }
+  
+  return request(`rehearsals/manage?band_id=${bandId}`, {
+    method: 'POST'
+  });
+};
+
+// export const getResponses = (rehearsalId = null, bandId) => {
+//   if (!bandId) {
+//     console.error('Band ID is required to get responses');
+//     return Promise.reject(new Error('Band ID is required'));
+//   }
+  
+//   const url = rehearsalId 
+//     ? `responses?rehearsal_id=${rehearsalId}&band_id=${bandId}` 
+//     : `responses?band_id=${bandId}`;
+  
+//   return request(url);
+
+// };
+
+export const getResponses = (rehearsalId = null, bandId) => {
+  if (!bandId) {
+    console.error('Band ID is required to get responses');
+    return Promise.reject(new Error('Band ID is required'));
+  }
+  
+  const url = rehearsalId 
+    ? `responses?rehearsal_id=${rehearsalId}&band_id=${bandId}` 
+    : `responses?band_id=${bandId}`;
+  
+  return request(url);
+};
